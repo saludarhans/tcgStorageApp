@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Search Results
+    {% if query %}<span class="search-query">"{{ query }}"</span>{% endif %}
+  </h1>
+</div>
+
+{% if query %}
+  {% if cards %}
+  <p class="results-count">{{ cards|length }} card{{ 's' if cards|length != 1 }} found</p>
+  <div class="card-grid">
+    {% for card in cards %}
+    <div class="pokemon-card">
+      <a href="{{ url_for('view_card', card_id=card.id) }}" class="card-img-link">
+        <img src="{{ card.display_image }}" alt="{{ card.name }}"
+             onerror="this.src='/static/placeholder.png'">
+        {% if card.is_graded %}<span class="badge-graded">{{ card.grade or 'Graded' }}</span>{% endif %}
+        {% if card.is_foil %}<span class="badge-foil">✨</span>{% endif %}
+      </a>
+      <div class="card-body">
+        <div class="card-name-row">
+          <a href="{{ url_for('view_card', card_id=card.id) }}" class="card-name">{{ card.name }}</a>
+        </div>
+        <div class="card-meta">
+          <span>{{ card.set_name or '—' }}</span>
+          {% if card.card_number %}<span>#{{ card.card_number }}</span>{% endif %}
+        </div>
+        <div class="card-footer-row">
+          <span class="condition-badge cond-{{ card.condition }}">{{ card.condition }}</span>
+          {% if card.market_price %}
+          <span class="card-price">${{ "%.2f"|format(card.market_price) }}</span>
+          {% else %}
+          <span class="card-price no-price">No price</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">🔍</div>
+    <h2>No results for "{{ query }}"</h2>
+    <p>Try searching by Pokémon name, card number, or set name.</p>
+  </div>
+  {% endif %}
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon">🔍</div>
+  <h2>Enter a search term above</h2>
+  <p>Search by Pokémon name, card number (e.g. 4/102), or set name.</p>
+</div>
+{% endif %}
+
+{% endblock %}

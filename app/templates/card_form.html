@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="form-page">
+  <div class="form-header">
+    <h1>{{ 'Edit Card' if action == 'edit' else 'Add a Card' }}</h1>
+    {% if action == 'edit' and card %}
+    <a href="{{ url_for('view_card', card_id=card.id) }}" class="btn btn-outline">← Back</a>
+    {% else %}
+    <a href="{{ url_for('collection') }}" class="btn btn-outline">← Collection</a>
+    {% endif %}
+  </div>
+
+  <form method="POST" enctype="multipart/form-data" class="card-form">
+    {{ form.hidden_tag() }}
+
+    <div class="form-section">
+      <h2>Card Identity</h2>
+      <div class="form-row-2">
+        <div class="form-group">
+          {{ form.name.label }}
+          {{ form.name(class="form-control", placeholder="e.g. Charizard") }}
+          {% for err in form.name.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+        </div>
+        <div class="form-group">
+          {{ form.card_number.label }}
+          {{ form.card_number(class="form-control", placeholder="e.g. 4/102") }}
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          {{ form.set_code.label(text="Set") }}
+          {{ form.set_code(class="form-control") }}
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          {{ form.card_type.label }}
+          {{ form.card_type(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.rarity.label }}
+          {{ form.rarity(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.pokemon_type.label }}
+          {{ form.pokemon_type(class="form-control") }}
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-group">
+          {{ form.hp.label }}
+          {{ form.hp(class="form-control", placeholder="e.g. 120") }}
+        </div>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Condition & Ownership</h2>
+      <div class="form-row-3">
+        <div class="form-group">
+          {{ form.condition.label }}
+          {{ form.condition(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.quantity.label }}
+          {{ form.quantity(class="form-control") }}
+        </div>
+        <div class="form-group">
+          {{ form.purchase_price.label }}
+          {{ form.purchase_price(class="form-control", placeholder="0.00") }}
+        </div>
+      </div>
+      <div class="form-row-check">
+        <label class="check-label">
+          {{ form.is_foil() }} Foil / Holo
+        </label>
+        <label class="check-label">
+          {{ form.is_graded() }} Graded
+        </label>
+      </div>
+      <div class="form-group" id="grade-field" style="display:none">
+        {{ form.grade.label }}
+        {{ form.grade(class="form-control", placeholder="e.g. PSA 10") }}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Image</h2>
+      <div class="form-group">
+        {{ form.image_url.label }}
+        {{ form.image_url(class="form-control", placeholder="https://images.pokemontcg.io/...") }}
+      </div>
+      <div class="form-group">
+        {{ form.card_image.label }}
+        {{ form.card_image(class="form-control-file") }}
+        {% if action == 'edit' and card and card.local_image %}
+        <p class="form-hint">Current: <img src="/static/uploads/{{ card.local_image }}" height="40"></p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Notes</h2>
+      <div class="form-group">
+        {{ form.notes(class="form-control", rows=3, placeholder="Any notes about this card…") }}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      {{ form.submit(class="btn btn-primary btn-lg") }}
+      <a href="{{ url_for('collection') }}" class="btn btn-outline btn-lg">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+  const gradedBox = document.querySelector('input[name="is_graded"]');
+  const gradeField = document.getElementById('grade-field');
+  function toggleGrade() {
+    gradeField.style.display = gradedBox.checked ? 'block' : 'none';
+  }
+  gradedBox.addEventListener('change', toggleGrade);
+  toggleGrade();
+</script>
+{% endblock %}

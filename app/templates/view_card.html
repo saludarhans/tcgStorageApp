@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card-detail">
+  <div class="card-detail-img-col">
+    <div class="detail-img-wrap">
+      <img src="{{ card.display_image }}" alt="{{ card.name }}"
+           onerror="this.src='/static/placeholder.png'">
+      {% if card.is_foil %}<div class="foil-shine"></div>{% endif %}
+    </div>
+    {% if card.is_graded %}
+    <div class="grade-badge-large">{{ card.grade or 'Graded' }}</div>
+    {% endif %}
+  </div>
+
+  <div class="card-detail-info-col">
+    <div class="detail-header">
+      <h1>{{ card.name }}</h1>
+      {% if card.pokemon_type %}
+      <span class="type-badge type-{{ card.pokemon_type.lower() }} type-lg">{{ card.pokemon_type }}</span>
+      {% endif %}
+    </div>
+
+    <div class="detail-actions">
+      <a href="{{ url_for('edit_card', card_id=card.id) }}" class="btn btn-outline">Edit</a>
+      <form action="{{ url_for('delete_card', card_id=card.id) }}" method="POST"
+            onsubmit="return confirm('Remove {{ card.name }} from your collection?')">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+
+    <div class="detail-grid">
+      {% macro row(label, value) %}
+        {% if value %}
+        <div class="detail-row">
+          <span class="detail-label">{{ label }}</span>
+          <span class="detail-value">{{ value }}</span>
+        </div>
+        {% endif %}
+      {% endmacro %}
+
+      {{ row('Set', card.set_name) }}
+      {{ row('Card Number', card.card_number) }}
+      {{ row('Set Code', card.set_code) }}
+      {{ row('Rarity', card.rarity) }}
+      {{ row('Type', card.card_type) }}
+      {{ row('HP', card.hp) }}
+      <div class="detail-row">
+        <span class="detail-label">Condition</span>
+        <span class="condition-badge cond-{{ card.condition }}">{{ card.condition }}</span>
+      </div>
+      {{ row('Quantity', card.quantity) }}
+      {% if card.is_foil %}
+      <div class="detail-row">
+        <span class="detail-label">Foil</span>
+        <span class="detail-value">✨ Yes</span>
+      </div>
+      {% endif %}
+      {% if card.is_graded %}
+      {{ row('Grade', card.grade) }}
+      {% endif %}
+    </div>
+
+    <div class="price-section">
+      <div class="price-box">
+        <span class="price-label">Market Value</span>
+        <span class="price-main">
+          {% if card.market_price %}${{ "%.2f"|format(card.market_price) }}{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="price-box">
+        <span class="price-label">Purchase Price</span>
+        <span class="price-secondary">
+          {% if card.purchase_price %}${{ "%.2f"|format(card.purchase_price) }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% if card.profit_loss is not none %}
+      <div class="price-box {% if card.profit_loss >= 0 %}gain{% else %}loss{% endif %}">
+        <span class="price-label">Gain / Loss</span>
+        <span class="price-secondary">
+          {{ '+' if card.profit_loss >= 0 else '' }}${{ "%.2f"|format(card.profit_loss) }}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if card.notes %}
+    <div class="detail-notes">
+      <h3>Notes</h3>
+      <p>{{ card.notes }}</p>
+    </div>
+    {% endif %}
+
+    <p class="detail-meta-footer">
+      Added {{ card.added_at.strftime('%B %d, %Y') }}
+      {% if card.last_price_update %}
+        · Prices updated {{ card.last_price_update.strftime('%B %d, %Y') }}
+      {% endif %}
+    </p>
+  </div>
+</div>
+
+{% endblock %}

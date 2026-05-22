@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% if title %}{{ title }} — {% endif %}PokéVault</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+{% if current_user.is_authenticated %}
+<nav class="topbar">
+  <div class="topbar-left">
+    <a href="{{ url_for('dashboard') }}" class="logo">
+      <span class="logo-ball">◉</span> PokéVault
+    </a>
+  </div>
+
+  <div class="topbar-center">
+    <form class="search-bar" action="{{ url_for('search') }}" method="GET">
+      <span class="search-icon">🔍</span>
+      <input type="text" name="q" placeholder="Search by Pokémon name, card number, set…"
+             value="{{ request.args.get('q', '') }}" autocomplete="off">
+    </form>
+  </div>
+
+  <div class="topbar-right">
+    <a href="{{ url_for('collection') }}" class="nav-link">Collection</a>
+    <a href="{{ url_for('add_card') }}" class="nav-link btn-add">+ Add Card</a>
+    {% if current_user.is_admin() %}
+    <a href="{{ url_for('admin') }}" class="nav-link nav-admin">Admin</a>
+    {% endif %}
+    <div class="user-menu">
+      <span class="user-avatar">{{ current_user.username[0].upper() }}</span>
+      <span class="user-name">{{ current_user.username }}</span>
+      <div class="user-dropdown">
+        <a href="{{ url_for('logout') }}">Sign Out</a>
+      </div>
+    </div>
+  </div>
+</nav>
+{% endif %}
+
+<main class="main-content {% if not current_user.is_authenticated %}full-width{% endif %}">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-container">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">
+            {{ message }}
+            <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  // Auto-dismiss flashes after 4s
+  setTimeout(() => {
+    document.querySelectorAll('.flash').forEach(f => f.remove());
+  }, 4000);
+</script>
+</body>
+</html>

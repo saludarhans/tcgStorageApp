@@ -1,0 +1,9 @@
+flask
+flask-sqlalchemy
+flask-wtf
+flask-login
+flask-migrate
+python-dotenv
+email-validator
+werkzeug
+requests

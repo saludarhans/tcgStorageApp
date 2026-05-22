@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-ball-lg">◉</span>
+      <h1>Create Account</h1>
+      <p>Join PokéVault and start tracking your collection</p>
+    </div>
+
+    <form method="POST" class="auth-form">
+      {{ form.hidden_tag() }}
+      <div class="form-group">
+        {{ form.username.label }}
+        {{ form.username(class="form-control", placeholder="Choose a username") }}
+        {% for err in form.username.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+      </div>
+      <div class="form-group">
+        {{ form.email.label }}
+        {{ form.email(class="form-control", placeholder="your@email.com") }}
+        {% for err in form.email.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+      </div>
+      <div class="form-group">
+        {{ form.password.label }}
+        {{ form.password(class="form-control", placeholder="At least 6 characters") }}
+        {% for err in form.password.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+      </div>
+      <div class="form-group">
+        {{ form.confirm_password.label }}
+        {{ form.confirm_password(class="form-control", placeholder="Repeat password") }}
+        {% for err in form.confirm_password.errors %}<span class="form-error">{{ err }}</span>{% endfor %}
+      </div>
+      {{ form.submit(class="btn btn-primary btn-full") }}
+    </form>
+
+    <p class="auth-switch">Already have an account? <a href="{{ url_for('login') }}">Sign in</a></p>
+  </div>
+</div>
+
+{% endblock %}

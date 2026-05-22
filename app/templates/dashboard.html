@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="dashboard">
+
+  <!-- Hero stats strip -->
+  <section class="stats-strip">
+    <div class="stat-card">
+      <div class="stat-icon">🃏</div>
+      <div class="stat-body">
+        <div class="stat-value">{{ total_cards }}</div>
+        <div class="stat-label">Total Cards</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">⚡</div>
+      <div class="stat-body">
+        <div class="stat-value">{{ unique_pokemon }}</div>
+        <div class="stat-label">Unique Pokémon</div>
+      </div>
+    </div>
+    <div class="stat-card accent">
+      <div class="stat-icon">💰</div>
+      <div class="stat-body">
+        <div class="stat-value">${{ "%.2f"|format(total_value) }}</div>
+        <div class="stat-label">Est. Collection Value</div>
+      </div>
+    </div>
+    <div class="stat-card {% if profit_loss >= 0 %}gain{% else %}loss{% endif %}">
+      <div class="stat-icon">{{ '📈' if profit_loss >= 0 else '📉' }}</div>
+      <div class="stat-body">
+        <div class="stat-value">{{ '+' if profit_loss >= 0 else '' }}${{ "%.2f"|format(profit_loss) }}</div>
+        <div class="stat-label">Gain / Loss</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="dashboard-grid">
+
+    <!-- Top valuable cards -->
+    <section class="panel panel-tall">
+      <div class="panel-header">
+        <h2>🏆 Most Valuable</h2>
+        <a href="{{ url_for('collection') }}?sort=value" class="panel-link">See all →</a>
+      </div>
+      {% if top_cards %}
+      <ol class="top-list">
+        {% for card in top_cards %}
+        <li class="top-item">
+          <span class="top-rank">#{{ loop.index }}</span>
+          <div class="top-img-wrap">
+            <img src="{{ card.display_image }}" alt="{{ card.name }}"
+                 onerror="this.src='/static/placeholder.png'">
+          </div>
+          <div class="top-info">
+            <a href="{{ url_for('view_card', card_id=card.id) }}" class="top-name">{{ card.name }}</a>
+            <span class="top-meta">{{ card.set_name or '—' }} · {{ card.card_number or '—' }}</span>
+          </div>
+          <span class="top-price">${{ "%.2f"|format(card.market_price) }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+      <p class="empty-msg">Add cards with market prices to see your top values.</p>
+      {% endif %}
+    </section>
+
+    <!-- Recent additions -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🆕 Recently Added</h2>
+        <a href="{{ url_for('collection') }}" class="panel-link">View collection →</a>
+      </div>
+      {% if recent_cards %}
+      <div class="card-grid-small">
+        {% for card in recent_cards %}
+        <a href="{{ url_for('view_card', card_id=card.id) }}" class="mini-card">
+          <div class="mini-card-img">
+            <img src="{{ card.display_image }}" alt="{{ card.name }}"
+                 onerror="this.src='/static/placeholder.png'">
+          </div>
+          <div class="mini-card-name">{{ card.name }}</div>
+          {% if card.market_price %}
+          <div class="mini-card-price">${{ "%.2f"|format(card.market_price) }}</div>
+          {% else %}
+          <div class="mini-card-price no-price">No price</div>
+          {% endif %}
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-cta">
+        <p>Your collection is empty!</p>
+        <a href="{{ url_for('add_card') }}" class="btn btn-primary">Add your first card</a>
+      </div>
+      {% endif %}
+    </section>
+
+    <!-- By rarity -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>✨ By Rarity</h2>
+      </div>
+      {% if rarity_counts %}
+      <ul class="breakdown-list">
+        {% for rarity, count in rarity_counts|dictsort(by='value', reverse=true) %}
+        <li class="breakdown-item">
+          <span class="breakdown-label">{{ rarity }}</span>
+          <div class="breakdown-bar-wrap">
+            <div class="breakdown-bar"
+                 style="width: {{ (count / total_cards * 100)|round|int }}%"></div>
+          </div>
+          <span class="breakdown-count">{{ count }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-msg">No rarity data yet.</p>
+      {% endif %}
+    </section>
+
+    <!-- By set -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>📦 By Set</h2>
+      </div>
+      {% if set_counts %}
+      <ul class="breakdown-list">
+        {% for set_name, count in set_counts|dictsort(by='value', reverse=true) %}
+        <li class="breakdown-item">
+          <span class="breakdown-label">{{ set_name }}</span>
+          <div class="breakdown-bar-wrap">
+            <div class="breakdown-bar secondary"
+                 style="width: {{ (count / total_cards * 100)|round|int }}%"></div>
+          </div>
+          <span class="breakdown-count">{{ count }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty-msg">No set data yet.</p>
+      {% endif %}
+    </section>
+
+  </div><!-- /dashboard-grid -->
+
+  <!-- Price refresh CTA -->
+  <section class="price-refresh-bar">
+    <span>💡 Connect the Pokémon TCG API to auto-populate market prices.</span>
+    <form action="{{ url_for('refresh_prices') }}" method="POST" style="display:inline">
+      <button type="submit" class="btn btn-outline btn-sm">Refresh Prices</button>
+    </form>
+  </section>
+
+</div>
+{% endblock %}
