@@ -6,33 +6,35 @@
   <!-- Hero stats strip -->
   <section class="stats-strip">
     <div class="stat-card">
-      <div class="stat-icon">🃏</div>
+      <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ total_cards }}</div>
         <div class="stat-label">Total Cards</div>
       </div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon">⚡</div>
+      <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ unique_pokemon }}</div>
         <div class="stat-label">Unique Pokémon</div>
       </div>
     </div>
     <div class="stat-card accent">
-      <div class="stat-icon">💰</div>
+      <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">${{ "%.2f"|format(total_value) }}</div>
         <div class="stat-label">Est. Collection Value</div>
       </div>
     </div>
+    {% if profit_loss is not none %}
     <div class="stat-card {% if profit_loss >= 0 %}gain{% else %}loss{% endif %}">
-      <div class="stat-icon">{{ '📈' if profit_loss >= 0 else '📉' }}</div>
+      <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ '+' if profit_loss >= 0 else '' }}${{ "%.2f"|format(profit_loss) }}</div>
         <div class="stat-label">Gain / Loss</div>
       </div>
     </div>
+    {% endif %}
   </section>
 
   <div class="dashboard-grid">
@@ -40,7 +42,7 @@
     <!-- Top valuable cards -->
     <section class="panel panel-tall">
       <div class="panel-header">
-        <h2>🏆 Most Valuable</h2>
+        <h2>Most Valuable</h2>
         <a href="{{ url_for('collection') }}?sort=value" class="panel-link">See all →</a>
       </div>
       {% if top_cards %}
@@ -68,7 +70,7 @@
     <!-- Recent additions -->
     <section class="panel">
       <div class="panel-header">
-        <h2>🆕 Recently Added</h2>
+        <h2>Recently Added</h2>
         <a href="{{ url_for('collection') }}" class="panel-link">View collection →</a>
       </div>
       {% if recent_cards %}
@@ -99,7 +101,7 @@
     <!-- By rarity -->
     <section class="panel">
       <div class="panel-header">
-        <h2>✨ By Rarity</h2>
+        <h2>By Rarity</h2>
       </div>
       {% if rarity_counts %}
       <ul class="breakdown-list">
@@ -122,7 +124,7 @@
     <!-- By set -->
     <section class="panel">
       <div class="panel-header">
-        <h2>📦 By Set</h2>
+        <h2>By Set</h2>
       </div>
       {% if set_counts %}
       <ul class="breakdown-list">
@@ -146,7 +148,7 @@
 
   <!-- Price refresh CTA -->
   <section class="price-refresh-bar">
-    <span>💡 Connect the Pokémon TCG API to auto-populate market prices.</span>
+    <span>Connect the Pokemon TCG API to auto-populate market prices.</span>
     <form action="{{ url_for('refresh_prices') }}" method="POST" style="display:inline">
       <button type="submit" class="btn btn-outline btn-sm">Refresh Prices</button>
     </form>

@@ -50,7 +50,7 @@
       <span class="badge-graded">{{ card.grade or 'Graded' }}</span>
       {% endif %}
       {% if card.is_foil %}
-      <span class="badge-foil">✨</span>
+      <span class="badge-foil">Foil</span>
       {% endif %}
     </a>
     <div class="card-body">
@@ -78,7 +78,7 @@
 </div>
 {% else %}
 <div class="empty-state">
-  <div class="empty-icon">🃏</div>
+  <div class="empty-icon"></div>
   <h2>No cards found</h2>
   <p>{% if current_type or current_rarity %}Try clearing your filters.{% else %}Start building your collection!{% endif %}</p>
   {% if not current_type and not current_rarity %}

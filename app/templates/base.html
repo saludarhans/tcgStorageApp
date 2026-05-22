@@ -20,7 +20,7 @@
 
   <div class="topbar-center">
     <form class="search-bar" action="{{ url_for('search') }}" method="GET">
-      <span class="search-icon">🔍</span>
+      <span class="search-icon"></span>
       <input type="text" name="q" placeholder="Search by Pokémon name, card number, set…"
              value="{{ request.args.get('q', '') }}" autocomplete="off">
     </form>

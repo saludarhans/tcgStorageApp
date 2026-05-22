@@ -1,8 +1,19 @@
+import re
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import (StringField, PasswordField, BooleanField, SubmitField,
                      SelectField, IntegerField, FloatField, TextAreaField)
 from wtforms.validators import DataRequired, Email, EqualTo, Length, Optional, NumberRange
+
+_ERA_PREFIXES = ('Scarlet & Violet ', 'Sword & Shield ', 'Sun & Moon ', 'XY ')
+
+def shorten_set_name(full: str) -> str:
+    """'Scarlet & Violet Surging Sparks (2024)' → 'Surging Sparks'"""
+    name = re.sub(r'\s*\(\d{4}\)\s*$', '', full).strip()
+    for prefix in _ERA_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
 
 # ── All sets from XY (2014) through 2026 ─────────────────────────────────────
 ALL_SETS = [
@@ -27,7 +38,7 @@ ALL_SETS = [
     ("sm5",      "Sun & Moon Ultra Prism (2018)"),
     ("sm6",      "Sun & Moon Forbidden Light (2018)"),
     ("sm7",      "Sun & Moon Celestial Storm (2018)"),
-    ("sm7a",     "Sun & Moon Dragon Majesty (2018)"),
+    ("sm75",     "Sun & Moon Dragon Majesty (2018)"),
     ("sm8",      "Sun & Moon Lost Thunder (2018)"),
     ("sm9",      "Sun & Moon Team Up (2019)"),
     ("sm10",     "Sun & Moon Unbroken Bonds (2019)"),
@@ -51,7 +62,7 @@ ALL_SETS = [
     ("pgo",      "Pokémon GO (2022)"),
     ("swsh11",   "Sword & Shield Lost Origin (2022)"),
     ("swsh12",   "Silver Tempest (2022)"),
-    ("swsh125",  "Crown Zenith (2023)"),
+    ("swsh12pt5","Crown Zenith (2023)"),
     # Scarlet & Violet Era
     ("sv1",      "Scarlet & Violet Base Set (2023)"),
     ("sv2",      "Scarlet & Violet Paldea Evolved (2023)"),
@@ -75,7 +86,7 @@ ALL_SETS = [
     ("sv14",     "Perfect Order (2026)"),
 ]
 
-SET_CHOICES = [('', '— select set —')] + ALL_SETS
+SET_CHOICES = [('', '— select set —')] + [(code, shorten_set_name(label)) for code, label in ALL_SETS]
 
 
 class LoginForm(FlaskForm):

@@ -6,11 +6,10 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.utils import secure_filename
 
 from app import app, db
-from app.models import User, Card
-from app.forms import LoginForm, RegisterForm, CardForm, SearchForm, ALL_SETS
+from app.models import User, Card, CardCatalog
+from app.forms import LoginForm, RegisterForm, CardForm, SearchForm, ALL_SETS, shorten_set_name
 
-# Build a code → name lookup from the master set list
-SET_CODE_TO_NAME = {code: name.rsplit(' (', 1)[0] for code, name in ALL_SETS}
+SET_CODE_TO_NAME = {code: shorten_set_name(name) for code, name in ALL_SETS}
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -69,9 +68,10 @@ def dashboard():
 
     total_cards = len(cards)
     unique_pokemon = len(set(c.name.lower() for c in cards))
-    total_value = sum(c.market_price or 0 for c in cards)
+    total_value = sum((c.market_price or 0) * c.quantity for c in cards)
     total_cost = sum((c.purchase_price or 0) * c.quantity for c in cards)
-    profit_loss = total_value - total_cost if total_cost else 0
+    cards_with_cost = [c for c in cards if c.purchase_price]
+    profit_loss = (total_value - total_cost) if cards_with_cost else None
 
     # Top 5 most valuable
     top_cards = sorted([c for c in cards if c.market_price], key=lambda c: c.market_price, reverse=True)[:5]
@@ -152,19 +152,24 @@ def collection():
 @login_required
 def search():
     q = request.args.get('q', '').strip()
-    cards = []
-    if q:
-        like = f'%{q}%'
-        cards = current_user.cards.filter(
-            db.or_(
-                Card.name.ilike(like),
-                Card.card_number.ilike(like),
-                Card.set_name.ilike(like),
-                Card.set_code.ilike(like),
-                Card.rarity.ilike(like),
-            )
-        ).order_by(Card.name).all()
-    return render_template('search.html', title='Search', cards=cards, query=q)
+    results = []
+    owned_keys = set()
+
+    if len(q) >= 2:
+        results = (CardCatalog.query
+                   .filter(CardCatalog.name.ilike(f'{q}%'))
+                   .order_by(CardCatalog.set_code, CardCatalog.card_number)
+                   .limit(200)
+                   .all())
+        if results:
+            owned_rows = (db.session.query(Card.name, Card.set_code)
+                          .filter(Card.user_id == current_user.id,
+                                  Card.name.ilike(f'{q}%'))
+                          .all())
+            owned_keys = {(r.name.lower(), r.set_code) for r in owned_rows}
+
+    return render_template('search.html', title='Search',
+                           results=results, owned_keys=owned_keys, query=q)
 
 
 # ─── Card CRUD ───────────────────────────────────────────────────────────────
@@ -172,8 +177,8 @@ def search():
 @app.route('/card/add')
 @login_required
 def add_card():
-    from app.forms import ALL_SETS
-    return render_template('add_card.html', title='Add Card', all_sets=ALL_SETS)
+    short_sets = [(code, shorten_set_name(label)) for code, label in ALL_SETS]
+    return render_template('add_card.html', title='Add Card', all_sets=short_sets)
 
 
 @app.route('/card/<int:card_id>')
@@ -267,6 +272,34 @@ def refresh_prices():
     return redirect(url_for('dashboard'))
 
 
+@app.route('/api/catalog-add/<tcg_id>', methods=['POST'])
+@login_required
+def catalog_add(tcg_id):
+    """Quick-add a card from the local catalog with default settings."""
+    cat = CardCatalog.query.filter_by(tcg_id=tcg_id).first_or_404()
+    card = Card(
+        user_id      = current_user.id,
+        name         = cat.name,
+        card_number  = cat.card_number,
+        set_name     = cat.set_name,
+        set_code     = cat.set_code,
+        rarity       = cat.rarity,
+        card_type    = cat.supertype or 'Pokemon',
+        pokemon_type = (cat.types or '').split(',')[0],
+        hp           = cat.hp,
+        image_url    = cat.image_large or cat.image_small,
+        condition    = 'NM',
+        quantity     = 1,
+        is_foil      = 'holo' in (cat.rarity or '').lower(),
+        market_price = cat.market_price,
+    )
+    if cat.market_price:
+        card.last_price_update = datetime.utcnow()
+    db.session.add(card)
+    db.session.commit()
+    return jsonify({'ok': True, 'card_id': card.id})
+
+
 # ─── Error handlers ──────────────────────────────────────────────────────────
 
 @app.errorhandler(403)
@@ -276,6 +309,48 @@ def forbidden(e):
 @app.errorhandler(404)
 def not_found(e):
     return render_template('errors/404.html'), 404
+
+
+@app.route('/api/local-search')
+@login_required
+def local_search():
+    """Search the locally-indexed card catalog."""
+    name     = request.args.get('name',     '').strip()
+    set_code = request.args.get('set_code', '').strip()
+    number   = request.args.get('number',   '').strip()
+    era      = request.args.get('era',      '').strip()
+    page     = max(int(request.args.get('page', 1) or 1), 1)
+    page_size = min(int(request.args.get('pageSize', 20) or 20), 100)
+
+    catalog_total = CardCatalog.query.count()
+
+    has_filter = bool(name or set_code or number or era)
+    if not has_filter:
+        return jsonify({'data': [], 'totalCount': 0,
+                        'catalogEmpty': catalog_total == 0})
+
+    q = CardCatalog.query
+
+    if name:
+        q = q.filter(CardCatalog.name.ilike(f'{name}%'))
+    if set_code:
+        q = q.filter(CardCatalog.set_code == set_code)
+    if number:
+        q = q.filter(CardCatalog.card_number.ilike(f'{number}%'))
+    if era and not set_code:
+        q = q.filter(CardCatalog.era == era)
+
+    total = q.count()
+    cards = (q.order_by(CardCatalog.name, CardCatalog.set_code, CardCatalog.card_number)
+              .offset((page - 1) * page_size)
+              .limit(page_size)
+              .all())
+
+    return jsonify({
+        'data':         [c.to_api_dict() for c in cards],
+        'totalCount':   total,
+        'catalogEmpty': catalog_total == 0,
+    })
 
 
 @app.route('/api/tcg-search')

@@ -32,7 +32,7 @@ class User(UserMixin, db.Model):
 
     @property
     def collection_value(self):
-        return sum(c.market_price or 0 for c in self.cards)
+        return sum((c.market_price or 0) * c.quantity for c in self.cards)
 
     @property
     def card_count(self):
@@ -40,6 +40,53 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f'<User {self.username}>'
+
+
+class CardCatalog(db.Model):
+    """Local index of every card across all tracked sets."""
+    __tablename__ = 'card_catalog'
+
+    id           = db.Column(db.Integer, primary_key=True)
+    tcg_id       = db.Column(db.String(60),  unique=True, nullable=False, index=True)
+    name         = db.Column(db.String(120), nullable=False, index=True)
+    card_number  = db.Column(db.String(20),  index=True)
+    set_name     = db.Column(db.String(120), index=True)
+    set_code     = db.Column(db.String(20),  index=True)
+    era          = db.Column(db.String(30),  index=True)
+    rarity       = db.Column(db.String(60))
+    supertype    = db.Column(db.String(30))
+    types        = db.Column(db.String(120))  # comma-separated
+    hp           = db.Column(db.Integer)
+    image_small  = db.Column(db.String(500))
+    image_large  = db.Column(db.String(500))
+    market_price = db.Column(db.Float)
+    indexed_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_api_dict(self):
+        """Return a dict shaped like the Pokemon TCG API card object so the
+        existing frontend renderGrid / openModal code works without changes."""
+        prices = {}
+        if self.market_price:
+            key = 'holofoil' if self.rarity and 'holo' in self.rarity.lower() else 'normal'
+            prices[key] = {'market': self.market_price}
+        return {
+            'id':        self.tcg_id,
+            'name':      self.name,
+            'number':    self.card_number,
+            'rarity':    self.rarity,
+            'supertype': self.supertype or 'Pokémon',
+            'types':     self.types.split(',') if self.types else [],
+            'hp':        str(self.hp) if self.hp else None,
+            'images': {
+                'small': self.image_small or '',
+                'large': self.image_large or self.image_small or '',
+            },
+            'set': {'id': self.set_code, 'name': self.set_name},
+            'tcgplayer': {'prices': prices} if prices else None,
+        }
+
+    def __repr__(self):
+        return f'<CardCatalog {self.tcg_id} {self.name}>'
 
 
 class SetReference(db.Model):

@@ -33,7 +33,7 @@ SETS = [
     ("Sun & Moon Ultra Prism",         "sm5",      "Sun & Moon",    2018),
     ("Sun & Moon Forbidden Light",     "sm6",      "Sun & Moon",    2018),
     ("Sun & Moon Celestial Storm",     "sm7",      "Sun & Moon",    2018),
-    ("Sun & Moon Dragon Majesty",      "sm7a",     "Sun & Moon",    2018),
+    ("Sun & Moon Dragon Majesty",      "sm75",     "Sun & Moon",    2018),
     ("Sun & Moon Lost Thunder",        "sm8",      "Sun & Moon",    2018),
     ("Sun & Moon Team Up",             "sm9",      "Sun & Moon",    2019),
     ("Sun & Moon Unbroken Bonds",      "sm10",     "Sun & Moon",    2019),
@@ -57,7 +57,7 @@ SETS = [
     ("Pokemon GO",                     "pgo",      "Sword & Shield",2022),
     ("Sword & Shield Lost Origin",     "swsh11",   "Sword & Shield",2022),
     ("Silver Tempest",                 "swsh12",   "Sword & Shield",2022),
-    ("Crown Zenith",                   "swsh125",  "Sword & Shield",2023),
+    ("Crown Zenith",                   "swsh12pt5","Sword & Shield",2023),
     # ── Scarlet & Violet Era (2023-present) ──────────────────────────────
     ("Scarlet & Violet Base Set",      "sv1",      "Scarlet & Violet",2023),
     ("Scarlet & Violet Paldea Evolved","sv2",      "Scarlet & Violet",2023),

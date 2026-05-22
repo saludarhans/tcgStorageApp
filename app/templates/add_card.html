@@ -1,17 +1,144 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+/* ── Queue section ──────────────────────────────────────── */
+.queue-section {
+  margin-top: 40px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+}
+.queue-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+.queue-title .badge {
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.queue-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.q-summary {
+  font-size: 0.82rem;
+  opacity: 0.5;
+}
+
+/* rows */
+.q-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.q-row:last-child { border-bottom: none; }
+.q-thumb {
+  width: 44px;
+  height: 60px;
+  object-fit: contain;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.04);
+}
+.q-info { flex: 1; min-width: 0; }
+.q-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.q-meta {
+  font-size: 0.75rem;
+  opacity: 0.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.q-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.q-ctrl {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.q-ctrl label {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  margin: 0;
+  white-space: nowrap;
+}
+.q-ctrl input,
+.q-ctrl select {
+  padding: 5px 8px;
+  font-size: 0.82rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07);
+  color: inherit;
+}
+.q-ctrl-qty   { width: 64px; }
+.q-ctrl-comp  { width: 84px; }
+.q-ctrl-grade { width: 68px; }
+
+.q-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.3;
+  font-size: 1.25rem;
+  padding: 0 4px;
+  line-height: 1;
+  flex-shrink: 0;
+  align-self: center;
+}
+.q-remove:hover { opacity: 1; color: #f87171; }
+
+/* card queued flash */
+@keyframes q-flash {
+  0%   { outline: 2px solid transparent; }
+  35%  { outline: 2px solid #60a5fa; box-shadow: 0 0 10px rgba(96,165,250,.35); }
+  100% { outline: 2px solid transparent; }
+}
+.picker-card.q-flash { animation: q-flash 0.5s ease-out forwards; }
+</style>
+
 <div class="picker-page">
 
-  <!-- ── Top: Search parameters ──────────────────────────── -->
+  <!-- ── Search panel ──────────────────────────────────────── -->
   <div class="picker-search-panel">
     <h1 class="picker-title">Add a Card</h1>
-    <p class="picker-subtitle">Fill in any fields and hit Search — then click a card to save it.</p>
+    <p class="picker-subtitle">Search below — click any result to queue it, then save all at once.</p>
 
     <div class="picker-fields">
       <div class="picker-field">
         <label>Pokémon Name</label>
-        <input id="f-name" type="text" class="form-control" placeholder="e.g. Charizard" autocomplete="off">
+        <input id="f-name" type="text" class="form-control"
+               placeholder="e.g. Charizard" autocomplete="off">
       </div>
       <div class="picker-field">
         <label>Era / Series</label>
@@ -28,7 +155,10 @@
         <select id="f-set" class="form-control">
           <option value="">All sets</option>
           {% for code, label in all_sets %}
-          <option value="{{ code }}" data-era="{{ code[:2] if not code.startswith('swsh') and not code.startswith('cel') and not code.startswith('pgo') else ('swsh' if code.startswith('swsh') or code in ['cel25','pgo'] else code[:2]) }}">{{ label }}</option>
+          <option value="{{ code }}"
+            data-era="{{ code[:2] if not code.startswith('swsh') and not code.startswith('cel') and not code.startswith('pgo') else ('swsh' if code.startswith('swsh') or code in ['cel25','pgo'] else code[:2]) }}">
+            {{ label }}
+          </option>
           {% endfor %}
         </select>
       </div>
@@ -36,33 +166,22 @@
         <label>Card Number</label>
         <input id="f-number" type="text" class="form-control" placeholder="e.g. 4">
       </div>
-      <div class="picker-field">
-        <label>Condition</label>
-        <select id="f-condition" class="form-control">
-          <option value="NM">Near Mint (NM)</option>
-          <option value="M">Mint (M)</option>
-          <option value="LP">Lightly Played (LP)</option>
-          <option value="MP">Moderately Played (MP)</option>
-          <option value="HP">Heavily Played (HP)</option>
-          <option value="DMG">Damaged (DMG)</option>
-        </select>
-      </div>
     </div>
 
     <div class="picker-actions">
-      <button id="btn-search" class="btn btn-primary btn-lg">🔍 Search Cards</button>
-      <button id="btn-clear" class="btn btn-outline">Clear</button>
+      <button id="btn-search" class="btn btn-primary btn-lg">Search Cards</button>
+      <button id="btn-clear"  class="btn btn-outline">Clear</button>
       <span id="search-status" class="search-status"></span>
     </div>
   </div>
 
-  <!-- ── Bottom: Results grid ────────────────────────────── -->
+  <!-- ── Results grid ──────────────────────────────────────── -->
   <div id="results-area" class="picker-results-area">
     <div class="picker-empty" id="results-empty">
-      <div class="picker-empty-icon">🃏</div>
+      <div class="picker-empty-icon"></div>
       <p>Search for a card above to see results</p>
     </div>
-    <div id="results-grid" class="picker-grid" style="display:none"></div>
+    <div id="results-grid"    class="picker-grid"    style="display:none"></div>
     <div id="results-loading" class="picker-loading" style="display:none">
       <div class="spinner"></div>
       <p>Searching the Pokédex…</p>
@@ -70,210 +189,137 @@
     <div id="results-error" class="picker-error" style="display:none"></div>
     <div id="results-pagination" class="picker-pagination" style="display:none">
       <button id="btn-prev" class="btn btn-outline btn-sm">← Prev</button>
-      <span id="page-info" class="page-info"></span>
+      <span   id="page-info" class="page-info"></span>
       <button id="btn-next" class="btn btn-outline btn-sm">Next →</button>
     </div>
   </div>
 
-</div>
-
-<!-- ── Confirm modal ──────────────────────────────────────── -->
-<div id="modal-overlay" class="modal-overlay" style="display:none">
-  <div class="modal-card">
-    <button class="modal-close" id="modal-close">×</button>
-    <div class="modal-inner">
-      <div class="modal-img-col">
-        <img id="modal-img" src="" alt="">
+  <!-- ── Queue (inline, below results) ─────────────────────── -->
+  <section id="queue-section" class="queue-section" style="display:none">
+    <div class="queue-header">
+      <div class="queue-title">
+        Queue
+        <span id="q-badge" class="badge">0</span>
       </div>
-      <div class="modal-info-col">
-        <h2 id="modal-name"></h2>
-        <div id="modal-meta" class="modal-meta"></div>
-        <div id="modal-price" class="modal-price-block"></div>
-
-        <div class="modal-form">
-          <div class="form-row-2">
-            <div class="form-group">
-              <label>Condition</label>
-              <select id="modal-condition" class="form-control">
-                <option value="NM">Near Mint (NM)</option>
-                <option value="M">Mint (M)</option>
-                <option value="LP">Lightly Played (LP)</option>
-                <option value="MP">Moderately Played (MP)</option>
-                <option value="HP">Heavily Played (HP)</option>
-                <option value="DMG">Damaged (DMG)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Quantity</label>
-              <input id="modal-qty" type="number" class="form-control" value="1" min="1">
-            </div>
-          </div>
-          <div class="form-row-2">
-            <div class="form-group">
-              <label>Purchase Price ($)</label>
-              <input id="modal-purchase" type="number" class="form-control" placeholder="0.00" step="0.01" min="0">
-            </div>
-            <div class="form-group">
-              <label>Graded?</label>
-              <select id="modal-graded" class="form-control">
-                <option value="">Not graded</option>
-                <option value="PSA 10">PSA 10</option>
-                <option value="PSA 9">PSA 9</option>
-                <option value="PSA 8">PSA 8</option>
-                <option value="BGS 10">BGS 10</option>
-                <option value="BGS 9.5">BGS 9.5</option>
-                <option value="CGC 10">CGC 10</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group">
-            <label>Notes</label>
-            <textarea id="modal-notes" class="form-control" rows="2" placeholder="Optional notes…"></textarea>
-          </div>
-        </div>
-
-        <button id="modal-save" class="btn btn-primary btn-lg btn-full">
-          ✅ Add to Collection
-        </button>
+      <div class="queue-header-right">
+        <span id="q-summary" class="q-summary"></span>
+        <button id="q-clear-btn" class="btn btn-outline btn-sm">Clear All</button>
+        <button id="q-save-btn"  class="btn btn-primary">Save to Collection</button>
       </div>
     </div>
-  </div>
-</div>
+    <div id="q-list"></div>
+  </section>
+
+</div><!-- /picker-page -->
 
 <script>
-const ERA_PREFIXES = {
-  xy: ['xy'],
-  sm: ['sm'],
-  swsh: ['swsh', 'cel', 'pgo'],
-  sv: ['sv']
-};
+let currentPage   = 1;
+let totalPages    = 1;
+let queueItems    = [];   // { uid, card, qty, gradeCompany, grade }
+let nextUid       = 0;
 
-let currentPage = 1;
-let totalPages  = 1;
-let lastQuery   = {};
-let selectedCard = null;
+const el = id => document.getElementById(id);
 
-const $ = id => document.getElementById(id);
-
-// ── Era → filter set dropdown ──────────────────────────────
-$('f-era').addEventListener('change', () => {
-  const era = $('f-era').value;
-  $('f-set').querySelectorAll('option').forEach(opt => {
+// ── Era → filter set dropdown ─────────────────────────────
+el('f-era').addEventListener('change', () => {
+  const era = el('f-era').value;
+  el('f-set').querySelectorAll('option').forEach(opt => {
     if (!opt.value) { opt.style.display = ''; return; }
     opt.style.display = (!era || opt.dataset.era === era) ? '' : 'none';
   });
-  $('f-set').value = '';
+  el('f-set').value = '';
 });
 
-// ── Enter key triggers search ──────────────────────────────
 ['f-name','f-number'].forEach(id => {
-  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(1); });
+  el(id).addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(1); });
 });
 
-$('btn-search').addEventListener('click', () => doSearch(1));
-$('btn-clear').addEventListener('click', () => {
-  ['f-name','f-number'].forEach(id => $(id).value = '');
-  $('f-era').value = ''; $('f-set').value = '';
-  $('results-grid').style.display = 'none';
-  $('results-empty').style.display = 'flex';
-  $('results-pagination').style.display = 'none';
-  $('search-status').textContent = '';
+el('btn-search').addEventListener('click', () => doSearch(1));
+el('btn-clear').addEventListener('click', () => {
+  ['f-name','f-number'].forEach(id => el(id).value = '');
+  el('f-era').value = '';
+  el('f-set').value = '';
+  el('results-grid').style.display     = 'none';
+  el('results-empty').style.display    = 'flex';
+  el('results-empty').querySelector('p').textContent = 'Search for a card above to see results';
+  el('results-pagination').style.display = 'none';
+  el('search-status').textContent      = '';
 });
 
-$('btn-prev').addEventListener('click', () => { if (currentPage > 1) doSearch(currentPage - 1); });
-$('btn-next').addEventListener('click', () => { if (currentPage < totalPages) doSearch(currentPage + 1); });
+el('btn-prev').addEventListener('click', () => { if (currentPage > 1) doSearch(currentPage - 1); });
+el('btn-next').addEventListener('click', () => { if (currentPage < totalPages) doSearch(currentPage + 1); });
 
-function buildQuery(page) {
-  const parts = [];
-  const name   = $('f-name').value.trim();
-  const setId  = $('f-set').value.trim();
-  const number = $('f-number').value.trim();
-
-  if (name)   parts.push(`name:"${name}*"`);
-  if (setId)  parts.push(`set.id:${setId}`);
-  if (number) parts.push(`number:${number}`);
-
-  // If only era selected (no set), filter by prefix
-  if (!setId && $('f-era').value) {
-    const prefixes = ERA_PREFIXES[$('f-era').value] || [];
-    if (prefixes.length) {
-      const setQ = prefixes.map(p => `set.id:${p}*`).join(' OR ');
-      parts.push(`(${setQ})`);
-    }
-  }
-
-  const q = parts.length ? parts.join(' ') : 'name:*';
-  return { q, page, pageSize: 20 };
+// ── Search ────────────────────────────────────────────────
+function buildParams(page) {
+  const p = { page, pageSize: 20 };
+  const name    = el('f-name').value.trim();
+  const setCode = el('f-set').value.trim();
+  const number  = el('f-number').value.trim();
+  const era     = el('f-era').value;
+  if (name)            p.name     = name;
+  if (setCode)         p.set_code = setCode;
+  if (number)          p.number   = number;
+  if (!setCode && era) p.era      = era;
+  return p;
 }
 
 async function doSearch(page) {
   currentPage = page;
-  lastQuery = buildQuery(page);
+  const params = buildParams(page);
+  if (!params.name && !params.set_code && !params.number && !params.era) {
+    el('results-empty').style.display = 'flex';
+    el('results-empty').querySelector('p').textContent =
+      'Enter a name, pick a set, or choose an era to search.';
+    el('search-status').textContent = '';
+    return;
+  }
 
-  $('results-empty').style.display = 'none';
-  $('results-error').style.display = 'none';
-  $('results-grid').style.display  = 'none';
-  $('results-pagination').style.display = 'none';
-  $('results-loading').style.display = 'flex';
-  $('search-status').textContent = 'Searching…';
+  el('results-empty').style.display      = 'none';
+  el('results-error').style.display      = 'none';
+  el('results-grid').style.display       = 'none';
+  el('results-pagination').style.display = 'none';
+  el('results-loading').style.display    = 'flex';
+  el('search-status').textContent        = 'Searching…';
 
-  const params = new URLSearchParams(lastQuery);
   try {
-    const res  = await fetch(`/api/tcg-search?${params}`);
+    const res  = await fetch(`/api/local-search?${new URLSearchParams(params)}`);
     const data = await res.json();
-    $('results-loading').style.display = 'none';
-
+    el('results-loading').style.display = 'none';
     if (data.error) throw new Error(data.error);
+
+    if (data.catalogEmpty) {
+      el('results-empty').style.display = 'flex';
+      el('results-empty').querySelector('p').textContent =
+        'Card catalog not indexed. Run: python3 index_cards.py';
+      el('search-status').textContent = '';
+      return;
+    }
 
     const cards = data.data || [];
     totalPages  = Math.ceil((data.totalCount || 0) / 20) || 1;
-    $('search-status').textContent = `${data.totalCount || 0} result${data.totalCount !== 1 ? 's' : ''}`;
+    el('search-status').textContent =
+      `${data.totalCount || 0} result${data.totalCount !== 1 ? 's' : ''}`;
 
     if (!cards.length) {
-      $('results-empty').style.display = 'flex';
-      $('results-empty').querySelector('p').textContent = 'No cards found — try different search terms.';
+      el('results-empty').style.display = 'flex';
+      el('results-empty').querySelector('p').textContent =
+        'No cards found — try different search terms.';
       return;
     }
 
     renderGrid(cards);
     if (data.totalCount > 20) {
-      $('page-info').textContent = `Page ${currentPage} of ${totalPages}`;
-      $('btn-prev').disabled = currentPage <= 1;
-      $('btn-next').disabled = currentPage >= totalPages;
-      $('results-pagination').style.display = 'flex';
+      el('page-info').textContent         = `Page ${currentPage} of ${totalPages}`;
+      el('btn-prev').disabled             = currentPage <= 1;
+      el('btn-next').disabled             = currentPage >= totalPages;
+      el('results-pagination').style.display = 'flex';
     }
   } catch (err) {
-    $('results-loading').style.display = 'none';
-    $('results-error').style.display = 'flex';
-    $('results-error').textContent = '⚠ ' + (err.message || 'Search failed');
-    $('search-status').textContent = '';
+    el('results-loading').style.display = 'none';
+    el('results-error').style.display   = 'flex';
+    el('results-error').textContent     = err.message || 'Search failed';
+    el('search-status').textContent     = '';
   }
-}
-
-function renderGrid(cards) {
-  const grid = $('results-grid');
-  grid.innerHTML = '';
-  cards.forEach(card => {
-    const price = getBestPrice(card);
-    const el = document.createElement('button');
-    el.className = 'picker-card';
-    el.innerHTML = `
-      <div class="picker-card-img">
-        <img src="${card.images?.small || '/static/placeholder.png'}"
-             alt="${card.name}"
-             onerror="this.src='/static/placeholder.png'">
-      </div>
-      <div class="picker-card-body">
-        <div class="picker-card-name">${card.name}</div>
-        <div class="picker-card-set">${card.set?.name || ''}</div>
-        <div class="picker-card-num">#${card.number || '—'} · ${card.rarity || ''}</div>
-        ${price ? `<div class="picker-card-price">$${price}</div>` : ''}
-      </div>
-    `;
-    el.addEventListener('click', () => openModal(card));
-    grid.appendChild(el);
-  });
-  grid.style.display = 'grid';
 }
 
 function getBestPrice(card) {
@@ -283,90 +329,207 @@ function getBestPrice(card) {
     if (prices[key]?.market) return prices[key].market.toFixed(2);
   }
   const first = Object.values(prices)[0];
-  if (first?.market) return first.market.toFixed(2);
-  return null;
+  return first?.market ? first.market.toFixed(2) : null;
 }
 
-function openModal(card) {
-  selectedCard = card;
-  $('modal-img').src = card.images?.large || card.images?.small || '/static/placeholder.png';
-  $('modal-name').textContent = card.name;
-
-  const price = getBestPrice(card);
-  $('modal-price').innerHTML = price
-    ? `<div class="modal-price-label">Market Price</div><div class="modal-price-value">$${price}</div>`
-    : `<div class="modal-price-label" style="color:var(--muted)">No price data</div>`;
-
-  $('modal-meta').innerHTML = `
-    <div class="detail-row"><span class="detail-label">Set</span><span>${card.set?.name || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Number</span><span>${card.number || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Rarity</span><span>${card.rarity || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Type</span><span>${(card.types||[]).join(', ') || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">HP</span><span>${card.hp || '—'}</span></div>
-  `;
-
-  // Pre-fill condition from search bar
-  $('modal-condition').value = $('f-condition').value;
-  $('modal-qty').value = 1;
-  $('modal-purchase').value = price || '';
-  $('modal-graded').value = '';
-  $('modal-notes').value = '';
-
-  $('modal-overlay').style.display = 'flex';
-  document.body.style.overflow = 'hidden';
-}
-
-function closeModal() {
-  $('modal-overlay').style.display = 'none';
-  document.body.style.overflow = '';
-}
-$('modal-close').addEventListener('click', closeModal);
-$('modal-overlay').addEventListener('click', e => { if (e.target === $('modal-overlay')) closeModal(); });
-
-$('modal-save').addEventListener('click', async () => {
-  if (!selectedCard) return;
-  const btn = $('modal-save');
-  btn.disabled = true;
-  btn.textContent = 'Saving…';
-
-  const grade = $('modal-graded').value;
-  const payload = {
-    name:           selectedCard.name,
-    card_number:    selectedCard.number,
-    set_name:       selectedCard.set?.name,
-    set_code:       selectedCard.set?.id,
-    rarity:         selectedCard.rarity,
-    card_type:      selectedCard.supertype,
-    pokemon_type:   (selectedCard.types || [])[0] || '',
-    hp:             selectedCard.hp ? parseInt(selectedCard.hp) : null,
-    image_url:      selectedCard.images?.large || selectedCard.images?.small || '',
-    condition:      $('modal-condition').value,
-    quantity:       parseInt($('modal-qty').value) || 1,
-    purchase_price: parseFloat($('modal-purchase').value) || null,
-    market_price:   parseFloat(getBestPrice(selectedCard)) || null,
-    is_graded:      !!grade,
-    grade:          grade || null,
-    notes:          $('modal-notes').value,
-    is_foil:        (selectedCard.rarity || '').toLowerCase().includes('holo'),
-  };
-
-  try {
-    const res = await fetch('/api/cards/quick-add', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+function renderGrid(cards) {
+  const grid = el('results-grid');
+  grid.innerHTML = '';
+  cards.forEach(card => {
+    const price = getBestPrice(card);
+    const btn   = document.createElement('button');
+    btn.className = 'picker-card';
+    btn.innerHTML = `
+      <div class="picker-card-img">
+        <img src="${card.images?.small || '/static/placeholder.png'}"
+             alt="${card.name}" onerror="this.src='/static/placeholder.png'">
+      </div>
+      <div class="picker-card-body">
+        <div class="picker-card-name">${card.name}</div>
+        <div class="picker-card-set">${card.set?.name || ''}</div>
+        <div class="picker-card-num">#${card.number || '—'} · ${card.rarity || ''}</div>
+        ${price ? `<div class="picker-card-price">$${price}</div>` : ''}
+      </div>`;
+    btn.addEventListener('click', () => {
+      addToQueue(card);
+      btn.classList.add('q-flash');
+      setTimeout(() => btn.classList.remove('q-flash'), 550);
     });
-    const data = await res.json();
-    if (data.ok) {
-      window.location.href = data.redirect || '/collection';
-    } else {
-      throw new Error(data.error || 'Save failed');
-    }
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = '✅ Add to Collection';
-    alert('Error: ' + err.message);
+    grid.appendChild(btn);
+  });
+  grid.style.display = 'grid';
+}
+
+// ── Queue ─────────────────────────────────────────────────
+
+function addToQueue(card) {
+  queueItems.push({ uid: nextUid++, card, qty: 1, gradeCompany: '', grade: '' });
+  syncQueue();
+  const section = el('queue-section');
+  if (section.style.display === 'none') {
+    section.style.display = '';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
+}
+
+function removeFromQueue(uid) {
+  queueItems = queueItems.filter(i => i.uid !== uid);
+  syncQueue();
+  if (!queueItems.length) el('queue-section').style.display = 'none';
+}
+
+function syncQueue() {
+  const list    = el('q-list');
+  const badge   = el('q-badge');
+  const summary = el('q-summary');
+
+  badge.textContent = queueItems.length;
+
+  if (!queueItems.length) {
+    list.innerHTML = '';
+    summary.textContent = '';
+    return;
+  }
+
+  list.innerHTML = '';
+  queueItems.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'q-row';
+    row.innerHTML = `
+      <img class="q-thumb"
+           src="${item.card.images?.small || '/static/placeholder.png'}"
+           alt="${item.card.name}" onerror="this.src='/static/placeholder.png'">
+      <div class="q-info">
+        <div class="q-name">${item.card.name}</div>
+        <div class="q-meta">
+          ${item.card.set?.name || ''}${item.card.number ? ' · #' + item.card.number : ''}${item.card.rarity ? ' · ' + item.card.rarity : ''}
+        </div>
+      </div>
+      <div class="q-controls">
+        <div class="q-ctrl">
+          <label>Qty</label>
+          <input class="q-ctrl-qty" type="number" min="1" value="${item.qty}"
+                 data-uid="${item.uid}" data-field="qty">
+        </div>
+        <div class="q-ctrl">
+          <label>Grading co.</label>
+          <select class="q-ctrl-comp" data-uid="${item.uid}" data-field="gradeCompany">
+            <option value="">None</option>
+            <option value="PSA" ${item.gradeCompany==='PSA'?'selected':''}>PSA</option>
+            <option value="BGS" ${item.gradeCompany==='BGS'?'selected':''}>BGS</option>
+            <option value="CGC" ${item.gradeCompany==='CGC'?'selected':''}>CGC</option>
+            <option value="SGC" ${item.gradeCompany==='SGC'?'selected':''}>SGC</option>
+          </select>
+        </div>
+        <div class="q-ctrl" style="${item.gradeCompany?'':'visibility:hidden'}">
+          <label>Grade</label>
+          <input class="q-ctrl-grade" type="number" min="1" max="10" step="0.5"
+                 value="${item.grade}" placeholder="e.g. 9.5"
+                 data-uid="${item.uid}" data-field="grade">
+        </div>
+      </div>
+      <button class="q-remove" data-uid="${item.uid}" title="Remove">×</button>`;
+    list.appendChild(row);
+  });
+
+  // Wire controls
+  list.querySelectorAll('[data-uid]').forEach(node => {
+    const uid   = parseInt(node.dataset.uid);
+    const field = node.dataset.field;
+    if (!field) return;
+    const update = () => {
+      const item = queueItems.find(i => i.uid === uid);
+      if (!item) return;
+      if (field === 'qty') {
+        item.qty = Math.max(1, parseInt(node.value) || 1);
+      } else if (field === 'gradeCompany') {
+        item.gradeCompany = node.value;
+        const gradeCtrl = node.closest('.q-controls')
+                              .querySelector('[data-field="grade"]')
+                              ?.closest('.q-ctrl');
+        if (gradeCtrl) gradeCtrl.style.visibility = node.value ? '' : 'hidden';
+      } else if (field === 'grade') {
+        item.grade = node.value;
+      }
+    };
+    node.addEventListener('change', update);
+    node.addEventListener('input',  update);
+  });
+
+  list.querySelectorAll('.q-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeFromQueue(parseInt(btn.dataset.uid)));
+  });
+
+  // Summary
+  const est = queueItems.reduce(
+    (s, i) => s + (parseFloat(getBestPrice(i.card)) || 0) * i.qty, 0
+  );
+  const n = queueItems.length;
+  summary.textContent = est > 0
+    ? `${n} card${n !== 1 ? 's' : ''} · est. $${est.toFixed(2)}`
+    : `${n} card${n !== 1 ? 's' : ''}`;
+}
+
+el('q-clear-btn').addEventListener('click', () => {
+  queueItems = [];
+  syncQueue();
+  el('queue-section').style.display = 'none';
 });
+
+el('q-save-btn').addEventListener('click', saveAll);
+
+async function saveAll() {
+  if (!queueItems.length) return;
+  const btn   = el('q-save-btn');
+  const total = queueItems.length;
+  btn.disabled = true;
+
+  const failed = [];
+  let saved = 0;
+
+  for (const item of queueItems) {
+    btn.textContent = `Saving ${saved + failed.length + 1} / ${total}…`;
+    const { card, qty, gradeCompany, grade } = item;
+    const gradeStr = gradeCompany && grade ? `${gradeCompany} ${grade}` : (gradeCompany || null);
+    const payload  = {
+      name:         card.name,
+      card_number:  card.number,
+      set_name:     card.set?.name,
+      set_code:     card.set?.id,
+      rarity:       card.rarity,
+      card_type:    card.supertype,
+      pokemon_type: (card.types || [])[0] || '',
+      hp:           card.hp ? parseInt(card.hp) : null,
+      image_url:    card.images?.large || card.images?.small || '',
+      condition:    'NM',
+      quantity:     qty,
+      market_price: parseFloat(getBestPrice(card)) || null,
+      is_graded:    !!gradeCompany,
+      grade:        gradeStr,
+      is_foil:      (card.rarity || '').toLowerCase().includes('holo'),
+    };
+    try {
+      const res  = await fetch('/api/cards/quick-add', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) saved++;
+      else failed.push(item);
+    } catch { failed.push(item); }
+  }
+
+  if (!failed.length) {
+    window.location.href = '/collection';
+    return;
+  }
+
+  btn.disabled    = false;
+  btn.textContent = 'Save to Collection';
+  queueItems      = failed;
+  syncQueue();
+  alert(`${saved} saved. ${failed.length} failed — they remain in your queue.`);
+}
 </script>
 {% endblock %}
