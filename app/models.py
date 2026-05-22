@@ -120,6 +120,7 @@ class Card(db.Model):
 
     condition    = db.Column(db.String(20), default='NM')
     quantity     = db.Column(db.Integer, default=1)
+    variant      = db.Column(db.String(60))
     is_foil      = db.Column(db.Boolean, default=False)
     is_graded    = db.Column(db.Boolean, default=False)
     grade        = db.Column(db.String(10))

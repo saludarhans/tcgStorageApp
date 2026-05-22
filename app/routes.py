@@ -3,13 +3,48 @@ import uuid
 from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, jsonify, abort
 from flask_login import login_user, logout_user, login_required, current_user
+from sqlalchemy import text
 from werkzeug.utils import secure_filename
 
 from app import app, db
 from app.models import User, Card, CardCatalog
-from app.forms import LoginForm, RegisterForm, CardForm, SearchForm, ALL_SETS, shorten_set_name
+from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, shorten_set_name
 
 SET_CODE_TO_NAME = {code: shorten_set_name(name) for code, name in ALL_SETS}
+
+# Chronological set ordering: CASE WHEN set_code='xy1' THEN 0 WHEN ... END
+_when = ' '.join(f"WHEN set_code='{code}' THEN {i}" for i, (code, _) in enumerate(ALL_SETS))
+_SET_AGE_EXPR = text(f"CASE {_when} ELSE {len(ALL_SETS)} END")
+
+# Numeric card-number ordering: treats '10' as 10 not '10', non-numeric sorts last
+_NUM_EXPR = text("CASE WHEN card_number GLOB '[0-9]*' THEN CAST(card_number AS INTEGER) ELSE 9999 END")
+
+
+def detect_variant(name, rarity, is_foil=False):
+    """Infer card variant from name, rarity string, and foil flag."""
+    r = (rarity or '').lower()
+    n = (name or '').lower()
+    if 'special illustration rare' in r: return 'Special Illustration Rare'
+    if 'illustration rare'         in r: return 'Illustration Rare'
+    if 'hyper rare'                in r: return 'Gold'
+    if 'rare rainbow' in r or 'rainbow rare' in r: return 'Rainbow Rare'
+    if 'rare secret'  in r or 'secret rare'  in r: return 'Secret Rare'
+    if 'rare ultra'   in r:              return 'Full Art'
+    if 'amazing rare' in r:              return 'Amazing Rare'
+    if 'prism star'   in r:              return 'Prism Star'
+    if 'rare break'   in r or n.endswith(' break'): return 'BREAK'
+    if 'vmax' in n: return 'VMax'
+    if 'vstar' in n: return 'VStar'
+    if n.endswith('-gx') or n.endswith(' gx') or 'rare holo gx' in r or 'shiny gx' in r:
+        return 'GX'
+    if n.endswith('-ex') or n.endswith(' ex') or 'holo ex' in r:
+        return 'EX'
+    if ('rare holo v' in r and 'vmax' not in r and 'vstar' not in r) or \
+       (n.endswith(' v') and 'vmax' not in n and 'vstar' not in n):
+        return 'V'
+    if 'reverse holo' in r:          return 'Reverse Holo'
+    if 'holo' in r or bool(is_foil): return 'Holo'
+    return 'Special'
 
 
 # ─── Auth ────────────────────────────────────────────────────────────────────
@@ -158,7 +193,7 @@ def search():
     if len(q) >= 2:
         results = (CardCatalog.query
                    .filter(CardCatalog.name.ilike(f'{q}%'))
-                   .order_by(CardCatalog.set_code, CardCatalog.card_number)
+                   .order_by(_SET_AGE_EXPR, _NUM_EXPR, CardCatalog.card_number)
                    .limit(200)
                    .all())
         if results:
@@ -196,9 +231,11 @@ def edit_card(card_id):
     card = Card.query.get_or_404(card_id)
     if card.user_id != current_user.id and not current_user.is_admin():
         abort(403)
-    form = CardForm(obj=card)
+    form = EditCardForm(obj=card)
     if form.validate_on_submit():
-        _populate_card(card, form)
+        card.notes          = form.notes.data
+        card.purchase_price = form.purchase_price.data
+        card.updated_at     = datetime.utcnow()
         db.session.commit()
         flash(f'"{card.name}" updated.', 'success')
         return redirect(url_for('view_card', card_id=card.id))
@@ -227,7 +264,6 @@ def _populate_card(card, form):
     card.card_type = form.card_type.data
     card.pokemon_type = form.pokemon_type.data
     card.hp = form.hp.data
-    card.condition = form.condition.data
     card.quantity = form.quantity.data
     card.is_foil = form.is_foil.data
     card.is_graded = form.is_graded.data
@@ -288,9 +324,9 @@ def catalog_add(tcg_id):
         pokemon_type = (cat.types or '').split(',')[0],
         hp           = cat.hp,
         image_url    = cat.image_large or cat.image_small,
-        condition    = 'NM',
         quantity     = 1,
         is_foil      = 'holo' in (cat.rarity or '').lower(),
+        variant      = detect_variant(cat.name, cat.rarity),
         market_price = cat.market_price,
     )
     if cat.market_price:
@@ -341,7 +377,7 @@ def local_search():
         q = q.filter(CardCatalog.era == era)
 
     total = q.count()
-    cards = (q.order_by(CardCatalog.name, CardCatalog.set_code, CardCatalog.card_number)
+    cards = (q.order_by(_SET_AGE_EXPR, _NUM_EXPR, CardCatalog.card_number)
               .offset((page - 1) * page_size)
               .limit(page_size)
               .all())
@@ -397,11 +433,11 @@ def quick_add_card():
     card.pokemon_type   = data.get('pokemon_type', '')
     card.hp             = data.get('hp')
     card.image_url      = data.get('image_url', '')
-    card.condition      = data.get('condition', 'NM')
     card.quantity       = int(data.get('quantity', 1))
     card.purchase_price = data.get('purchase_price')
     card.market_price   = data.get('market_price')
     card.is_foil        = bool(data.get('is_foil', False))
+    card.variant        = data.get('variant') or detect_variant(card.name, card.rarity, card.is_foil)
     card.is_graded      = bool(data.get('is_graded', False))
     card.grade          = data.get('grade')
     card.notes          = data.get('notes', '')

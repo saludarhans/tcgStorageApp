@@ -472,10 +472,17 @@ img { display: block; max-width: 100%; }
 /* ── Card Picker Page ─────────────────────────────────────── */
 .picker-page {
   display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.picker-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  height: calc(100vh - var(--nav-h) - 4rem);
-  min-height: 600px;
 }
 
 .picker-search-panel {
@@ -484,6 +491,10 @@ img { display: block; max-width: 100%; }
   border-radius: var(--radius);
   padding: 1.5rem;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: .75rem;
 }
 
 .picker-title    { font-size: 1.5rem; font-weight: 700; margin-bottom: .2rem; }
@@ -491,23 +502,27 @@ img { display: block; max-width: 100%; }
 
 .picker-fields {
   display: flex;
+  flex-direction: row;
   gap: .75rem;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 0;
 }
 
 .picker-field {
   display: flex;
   flex-direction: column;
   gap: .3rem;
-  flex: 1 1 180px;
+  flex: 1;
+  min-width: 0;
 }
 .picker-field label { font-size: .8rem; font-weight: 600; color: var(--muted); }
-.picker-field-sm   { flex: 0 0 110px; }
+.picker-field-sm   { flex: 0 0 100px; }
 
 .picker-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: .75rem;
   flex-wrap: wrap;
 }
@@ -518,8 +533,6 @@ img { display: block; max-width: 100%; }
 
 /* ── Results area ─────────────────────────────────────────── */
 .picker-results-area {
-  flex: 1;
-  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);

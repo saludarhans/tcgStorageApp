@@ -140,14 +140,6 @@ class CardForm(FlaskForm):
         ('Fairy', 'Fairy'), ('Dragon', 'Dragon'),
     ], validators=[Optional()])
     hp = IntegerField('HP', validators=[Optional(), NumberRange(min=0, max=999)])
-    condition = SelectField('Condition', choices=[
-        ('M',   'Mint (M)'),
-        ('NM',  'Near Mint (NM)'),
-        ('LP',  'Lightly Played (LP)'),
-        ('MP',  'Moderately Played (MP)'),
-        ('HP',  'Heavily Played (HP)'),
-        ('DMG', 'Damaged (DMG)'),
-    ], default='NM')
     quantity = IntegerField('Quantity', default=1, validators=[NumberRange(min=1)])
     is_foil   = BooleanField('Foil / Holo')
     is_graded = BooleanField('Graded')
@@ -159,6 +151,34 @@ class CardForm(FlaskForm):
     ])
     notes = TextAreaField('Notes', validators=[Optional(), Length(max=1000)])
     submit = SubmitField('Save Card')
+
+
+VARIANT_CHOICES = [
+    ('Standard',                  'Standard'),
+    ('Holo',                      'Holo'),
+    ('Reverse Holo',              'Reverse Holo'),
+    ('Full Art',                  'Full Art'),
+    ('EX',                        'EX'),
+    ('GX',                        'GX'),
+    ('V',                         'V'),
+    ('VStar',                     'VStar'),
+    ('VMax',                      'VMax'),
+    ('BREAK',                     'BREAK'),
+    ('Prism Star',                'Prism Star'),
+    ('Amazing Rare',              'Amazing Rare'),
+    ('Illustration Rare',         'Illustration Rare'),
+    ('Special Illustration Rare', 'Special Illustration Rare'),
+    ('Rainbow Rare',              'Rainbow Rare'),
+    ('Gold',                      'Gold'),
+    ('Secret Rare',               'Secret Rare'),
+    ('Special',                   'Special'),
+]
+
+
+class EditCardForm(FlaskForm):
+    purchase_price = FloatField('Purchase Price', validators=[Optional()])
+    notes          = TextAreaField('Notes', validators=[Optional(), Length(max=1000)])
+    submit         = SubmitField('Save Changes')
 
 
 class SearchForm(FlaskForm):

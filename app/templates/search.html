@@ -46,9 +46,9 @@
           {% else %}
           <span class="card-price no-price">No price</span>
           {% endif %}
-          <button class="btn btn-sm {% if is_owned %}btn-outline{% else %}btn-primary{% endif %} catalog-add-btn"
+          <button class="btn btn-sm btn-primary catalog-add-btn"
                   data-tcg-id="{{ card.tcg_id }}">
-            {{ '+ Add' if not is_owned else '+ Add again' }}
+            + Add
           </button>
         </div>
       </div>

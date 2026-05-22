@@ -2,12 +2,18 @@
 {% block content %}
 
 <style>
-/* ── Queue section ──────────────────────────────────────── */
+/* ── Queue sidebar ──────────────────────────────────────── */
 .queue-section {
-  margin-top: 40px;
+  width: 300px;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(var(--nav-h) + 1rem);
+  max-height: calc(100vh - var(--nav-h) - 2rem);
+  overflow-y: auto;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 12px;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 .queue-header {
   display: flex;
@@ -45,15 +51,20 @@
 /* rows */
 .q-row {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 10px 20px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
 }
 .q-row:last-child { border-bottom: none; }
+.q-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .q-thumb {
-  width: 44px;
-  height: 60px;
+  width: 36px;
+  height: 50px;
   object-fit: contain;
   border-radius: 4px;
   flex-shrink: 0;
@@ -62,13 +73,13 @@
 .q-info { flex: 1; min-width: 0; }
 .q-name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .q-meta {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   opacity: 0.5;
   white-space: nowrap;
   overflow: hidden;
@@ -77,32 +88,64 @@
 .q-controls {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  flex-shrink: 0;
+  gap: 6px;
 }
 .q-ctrl {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  flex: 1;
+  min-width: 0;
 }
 .q-ctrl label {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   opacity: 0.5;
   margin: 0;
   white-space: nowrap;
 }
 .q-ctrl input,
 .q-ctrl select {
-  padding: 5px 8px;
-  font-size: 0.82rem;
+  width: 100%;
+  padding: 4px 6px;
+  font-size: 0.8rem;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.15);
   background: rgba(255,255,255,0.07);
   color: inherit;
 }
-.q-ctrl-qty   { width: 64px; }
-.q-ctrl-comp  { width: 84px; }
-.q-ctrl-grade { width: 68px; }
+.q-ctrl-qty   { flex: 0 0 54px; }
+.q-ctrl-comp  { flex: 1; }
+.q-ctrl-grade { flex: 0 0 54px; }
+.q-variant-fixed {
+  display: inline-block;
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+}
+
+.q-empty-state {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  opacity: 0.4;
+}
+.q-footer {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+.q-footer .q-summary {
+  text-align: center;
+}
 
 .q-remove {
   background: none;
@@ -118,22 +161,68 @@
 }
 .q-remove:hover { opacity: 1; color: #f87171; }
 
-/* card queued flash */
+/* ── Picker cards: image only, hover to reveal info ─────── */
+.picker-card {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  aspect-ratio: 2 / 3;
+  background: #0d1117;
+}
+.picker-card-img {
+  width: 100%;
+  height: 100%;
+}
+.picker-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+.picker-card:hover .picker-card-img img,
+.picker-card:focus  .picker-card-img img {
+  transform: scale(1.05);
+}
+.picker-card-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px 9px 9px;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,0.92) 0%,
+    rgba(0,0,0,0.55) 45%,
+    transparent      100%
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.picker-card:hover .picker-card-overlay,
+.picker-card:focus  .picker-card-overlay { opacity: 1; }
+
+.picker-card-name  { font-size: 0.8rem;  font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 2px; }
+.picker-card-meta  { font-size: 0.68rem; color: #fff; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.picker-card-price { font-size: 0.82rem; font-weight: 700; color: #60a5fa; margin-top: 5px; }
+
+/* queued flash — box-shadow so it works with overflow:hidden */
 @keyframes q-flash {
-  0%   { outline: 2px solid transparent; }
-  35%  { outline: 2px solid #60a5fa; box-shadow: 0 0 10px rgba(96,165,250,.35); }
-  100% { outline: 2px solid transparent; }
+  0%,100% { box-shadow: 0 0 0 2px transparent; }
+  35%     { box-shadow: 0 0 0 2px #60a5fa, 0 0 14px rgba(96,165,250,.45); }
 }
 .picker-card.q-flash { animation: q-flash 0.5s ease-out forwards; }
 </style>
 
 <div class="picker-page">
 
+<div class="picker-main">
+
   <!-- ── Search panel ──────────────────────────────────────── -->
   <div class="picker-search-panel">
-    <h1 class="picker-title">Add a Card</h1>
-    <p class="picker-subtitle">Search below — click any result to queue it, then save all at once.</p>
-
     <div class="picker-fields">
       <div class="picker-field">
         <label>Pokémon Name</label>
@@ -194,21 +283,26 @@
     </div>
   </div>
 
-  <!-- ── Queue (inline, below results) ─────────────────────── -->
-  <section id="queue-section" class="queue-section" style="display:none">
+</div><!-- /picker-main -->
+
+  <!-- ── Queue sidebar ─────────────────────────────────────── -->
+  <aside class="queue-section">
     <div class="queue-header">
       <div class="queue-title">
         Queue
         <span id="q-badge" class="badge">0</span>
       </div>
-      <div class="queue-header-right">
-        <span id="q-summary" class="q-summary"></span>
-        <button id="q-clear-btn" class="btn btn-outline btn-sm">Clear All</button>
-        <button id="q-save-btn"  class="btn btn-primary">Save to Collection</button>
-      </div>
+    </div>
+    <div id="q-empty-state" class="q-empty-state">
+      <p>Click a card to add it to your queue</p>
     </div>
     <div id="q-list"></div>
-  </section>
+    <div id="q-footer" class="q-footer" style="display:none">
+      <span id="q-summary" class="q-summary"></span>
+      <button id="q-clear-btn" class="btn btn-outline btn-sm">Clear All</button>
+      <button id="q-save-btn"  class="btn btn-primary" style="width:100%">Save to Collection</button>
+    </div>
+  </aside>
 
 </div><!-- /picker-page -->
 
@@ -339,15 +433,16 @@ function renderGrid(cards) {
     const price = getBestPrice(card);
     const btn   = document.createElement('button');
     btn.className = 'picker-card';
+    const meta = [card.set?.name, card.number ? '#' + card.number : '', card.rarity]
+                   .filter(Boolean).join(' · ');
     btn.innerHTML = `
       <div class="picker-card-img">
         <img src="${card.images?.small || '/static/placeholder.png'}"
              alt="${card.name}" onerror="this.src='/static/placeholder.png'">
       </div>
-      <div class="picker-card-body">
+      <div class="picker-card-overlay">
         <div class="picker-card-name">${card.name}</div>
-        <div class="picker-card-set">${card.set?.name || ''}</div>
-        <div class="picker-card-num">#${card.number || '—'} · ${card.rarity || ''}</div>
+        <div class="picker-card-meta">${meta}</div>
         ${price ? `<div class="picker-card-price">$${price}</div>` : ''}
       </div>`;
     btn.addEventListener('click', () => {
@@ -360,22 +455,62 @@ function renderGrid(cards) {
   grid.style.display = 'grid';
 }
 
+// ── Variant detection (mirrors server-side logic) ─────────
+
+const VARIANTS = [
+  'Standard','Holo','Reverse Holo','Full Art','EX','GX','V','VStar','VMax',
+  'BREAK','Prism Star','Amazing Rare','Illustration Rare',
+  'Special Illustration Rare','Rainbow Rare','Gold','Secret Rare','Special'
+];
+
+function detectVariant(name, rarity, isFoil) {
+  const r = (rarity || '').toLowerCase();
+  const n = (name   || '').toLowerCase();
+  if (r.includes('special illustration rare')) return 'Special Illustration Rare';
+  if (r.includes('illustration rare'))         return 'Illustration Rare';
+  if (r.includes('hyper rare'))                return 'Gold';
+  if (r.includes('rare rainbow') || r.includes('rainbow rare')) return 'Rainbow Rare';
+  if (r.includes('rare secret')  || r.includes('secret rare'))  return 'Secret Rare';
+  if (r.includes('rare ultra'))                return 'Full Art';
+  if (r.includes('amazing rare'))              return 'Amazing Rare';
+  if (r.includes('prism star'))                return 'Prism Star';
+  if (r.includes('rare break') || n.endsWith(' break')) return 'BREAK';
+  if (n.includes('vmax'))  return 'VMax';
+  if (n.includes('vstar')) return 'VStar';
+  if (n.endsWith('-gx') || n.endsWith(' gx') || r.includes('rare holo gx') || r.includes('shiny gx')) return 'GX';
+  if (n.endsWith('-ex') || n.endsWith(' ex') || r.includes('holo ex')) return 'EX';
+  if ((r.includes('rare holo v') && !r.includes('vmax') && !r.includes('vstar')) ||
+      (n.endsWith(' v') && !n.includes('vmax') && !n.includes('vstar'))) return 'V';
+  if (r.includes('reverse holo'))       return 'Reverse Holo';
+  if (r.includes('holo') || isFoil)    return 'Holo';
+  return 'Standard';
+}
+
+/**
+ * Returns the list of versions this card physically exists in.
+ * Common / Uncommon / plain Rare (non-holo) cards come in Standard
+ * and Reverse Holo. Everything else is a single fixed variant.
+ */
+function getAvailableVariants(name, rarity) {
+  const r = (rarity || '').toLowerCase().trim();
+  if (r === 'common' || r === 'uncommon' || r === 'rare') {
+    return ['Standard', 'Reverse Holo'];
+  }
+  return [detectVariant(name, rarity, false)];
+}
+
 // ── Queue ─────────────────────────────────────────────────
 
 function addToQueue(card) {
-  queueItems.push({ uid: nextUid++, card, qty: 1, gradeCompany: '', grade: '' });
+  const available  = getAvailableVariants(card.name, card.rarity);
+  const autoVariant = available[0];
+  queueItems.push({ uid: nextUid++, card, qty: 1, gradeCompany: '', grade: '', variant: autoVariant, availableVariants: available });
   syncQueue();
-  const section = el('queue-section');
-  if (section.style.display === 'none') {
-    section.style.display = '';
-    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 }
 
 function removeFromQueue(uid) {
   queueItems = queueItems.filter(i => i.uid !== uid);
   syncQueue();
-  if (!queueItems.length) el('queue-section').style.display = 'none';
 }
 
 function syncQueue() {
@@ -384,10 +519,11 @@ function syncQueue() {
   const summary = el('q-summary');
 
   badge.textContent = queueItems.length;
+  el('q-empty-state').style.display = queueItems.length ? 'none' : '';
+  el('q-footer').style.display      = queueItems.length ? ''     : 'none';
 
   if (!queueItems.length) {
     list.innerHTML = '';
-    summary.textContent = '';
     return;
   }
 
@@ -396,24 +532,27 @@ function syncQueue() {
     const row = document.createElement('div');
     row.className = 'q-row';
     row.innerHTML = `
-      <img class="q-thumb"
-           src="${item.card.images?.small || '/static/placeholder.png'}"
-           alt="${item.card.name}" onerror="this.src='/static/placeholder.png'">
-      <div class="q-info">
-        <div class="q-name">${item.card.name}</div>
-        <div class="q-meta">
-          ${item.card.set?.name || ''}${item.card.number ? ' · #' + item.card.number : ''}${item.card.rarity ? ' · ' + item.card.rarity : ''}
+      <div class="q-row-top">
+        <img class="q-thumb"
+             src="${item.card.images?.small || '/static/placeholder.png'}"
+             alt="${item.card.name}" onerror="this.src='/static/placeholder.png'">
+        <div class="q-info">
+          <div class="q-name">${item.card.name}</div>
+          <div class="q-meta">
+            ${item.card.set?.name || ''}${item.card.number ? ' · #' + item.card.number : ''}
+          </div>
         </div>
+        <button class="q-remove" data-uid="${item.uid}" title="Remove">×</button>
       </div>
       <div class="q-controls">
-        <div class="q-ctrl">
+        <div class="q-ctrl q-ctrl-qty">
           <label>Qty</label>
-          <input class="q-ctrl-qty" type="number" min="1" value="${item.qty}"
+          <input type="number" min="1" value="${item.qty}"
                  data-uid="${item.uid}" data-field="qty">
         </div>
-        <div class="q-ctrl">
+        <div class="q-ctrl q-ctrl-comp">
           <label>Grading co.</label>
-          <select class="q-ctrl-comp" data-uid="${item.uid}" data-field="gradeCompany">
+          <select data-uid="${item.uid}" data-field="gradeCompany">
             <option value="">None</option>
             <option value="PSA" ${item.gradeCompany==='PSA'?'selected':''}>PSA</option>
             <option value="BGS" ${item.gradeCompany==='BGS'?'selected':''}>BGS</option>
@@ -421,14 +560,24 @@ function syncQueue() {
             <option value="SGC" ${item.gradeCompany==='SGC'?'selected':''}>SGC</option>
           </select>
         </div>
-        <div class="q-ctrl" style="${item.gradeCompany?'':'visibility:hidden'}">
+        <div class="q-ctrl q-ctrl-grade" style="${item.gradeCompany?'':'visibility:hidden'}">
           <label>Grade</label>
-          <input class="q-ctrl-grade" type="number" min="1" max="10" step="0.5"
-                 value="${item.grade}" placeholder="e.g. 9.5"
+          <input type="number" min="1" max="10" step="0.5"
+                 value="${item.grade}" placeholder="9.5"
                  data-uid="${item.uid}" data-field="grade">
         </div>
       </div>
-      <button class="q-remove" data-uid="${item.uid}" title="Remove">×</button>`;
+      <div class="q-controls">
+        <div class="q-ctrl" style="flex:1">
+          <label>Version</label>
+          ${item.availableVariants.length > 1
+            ? `<select data-uid="${item.uid}" data-field="variant">
+                ${item.availableVariants.map(v => `<option value="${v}" ${item.variant===v?'selected':''}>${v}</option>`).join('')}
+               </select>`
+            : `<span class="q-variant-fixed">${item.variant}</span>`
+          }
+        </div>
+      </div>`;
     list.appendChild(row);
   });
 
@@ -450,6 +599,8 @@ function syncQueue() {
         if (gradeCtrl) gradeCtrl.style.visibility = node.value ? '' : 'hidden';
       } else if (field === 'grade') {
         item.grade = node.value;
+      } else if (field === 'variant') {
+        item.variant = node.value;
       }
     };
     node.addEventListener('change', update);
@@ -473,7 +624,6 @@ function syncQueue() {
 el('q-clear-btn').addEventListener('click', () => {
   queueItems = [];
   syncQueue();
-  el('queue-section').style.display = 'none';
 });
 
 el('q-save-btn').addEventListener('click', saveAll);
@@ -489,7 +639,7 @@ async function saveAll() {
 
   for (const item of queueItems) {
     btn.textContent = `Saving ${saved + failed.length + 1} / ${total}…`;
-    const { card, qty, gradeCompany, grade } = item;
+    const { card, qty, gradeCompany, grade, variant } = item;
     const gradeStr = gradeCompany && grade ? `${gradeCompany} ${grade}` : (gradeCompany || null);
     const payload  = {
       name:         card.name,
@@ -501,12 +651,12 @@ async function saveAll() {
       pokemon_type: (card.types || [])[0] || '',
       hp:           card.hp ? parseInt(card.hp) : null,
       image_url:    card.images?.large || card.images?.small || '',
-      condition:    'NM',
       quantity:     qty,
       market_price: parseFloat(getBestPrice(card)) || null,
       is_graded:    !!gradeCompany,
       grade:        gradeStr,
       is_foil:      (card.rarity || '').toLowerCase().includes('holo'),
+      variant:      variant || null,
     };
     try {
       const res  = await fetch('/api/cards/quick-add', {
