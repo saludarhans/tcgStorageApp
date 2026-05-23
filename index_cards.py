@@ -29,13 +29,17 @@ FIELDS     = 'id,name,number,rarity,supertype,types,hp,images,set,tcgplayer'
 
 
 def era_for(set_code: str) -> str:
+    if set_code in ('svp', 'swshp', 'smp', 'xyp', 'bwp'):
+        return 'promo'
+    if set_code.startswith('me'):
+        return 'me'
     if set_code.startswith('xy'):
         return 'xy'
     if set_code.startswith('sm'):
         return 'sm'
     if set_code.startswith('swsh') or set_code in ('cel25', 'pgo'):
         return 'swsh'
-    if set_code.startswith('sv'):
+    if set_code.startswith('sv') or set_code.startswith('rsv') or set_code.startswith('zsv'):
         return 'sv'
     return 'other'
 

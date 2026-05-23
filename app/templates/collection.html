@@ -1,11 +1,137 @@
 {% extends "base.html" %}
 {% block content %}
 
+<style>
+/* ── Delete button on card hover ── */
+.pokemon-card {
+  position: relative;   /* anchor the X button */
+}
+.card-delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 20;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.70);
+  color: #fff;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity .15s, transform .15s, background .15s;
+  pointer-events: none;
+}
+.pokemon-card:hover .card-delete-btn {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+.card-delete-btn:hover {
+  background: #ef4444;
+}
+
+/* fade-out animation for deleted cards */
+@keyframes card-vanish {
+  to { opacity: 0; transform: scale(0.88); }
+}
+.pokemon-card.deleting {
+  animation: card-vanish 0.25s ease-out forwards;
+  pointer-events: none;
+}
+
+/* ── Multi-delete mode ── */
+
+/* Transparent overlay that intercepts clicks in del-mode */
+.card-click-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;           /* above link/image, below X btn (z-20) */
+  display: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.del-mode-active .card-click-overlay { display: block; }
+
+/* Hide single-delete X while in multi-delete mode */
+.del-mode-active .card-delete-btn { opacity: 0 !important; pointer-events: none !important; }
+
+/* Selection dot (top-left circle) */
+.card-select-dot {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 20;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.45);
+  background: rgba(0,0,0,0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s, background .15s, border-color .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #fff;
+}
+.del-mode-active .card-select-dot { opacity: 1; }
+.pokemon-card.selected .card-select-dot {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+.card-select-dot::after {
+  content: '✓';
+  opacity: 0;
+  transition: opacity .1s;
+}
+.pokemon-card.selected .card-select-dot::after { opacity: 1; }
+
+/* Selected card ring */
+.pokemon-card.selected {
+  outline: 2.5px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* Bottom action bar */
+.del-action-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 200;
+  background: var(--surface, #1e2130);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  transform: translateY(100%);
+  transition: transform .25s cubic-bezier(.4,0,.2,1);
+  box-shadow: 0 -6px 24px rgba(0,0,0,0.35);
+}
+.del-action-bar.visible { transform: translateY(0); }
+.del-action-bar-left { display: flex; align-items: center; gap: .75rem; }
+.del-sel-count { font-size: .9rem; font-weight: 600; }
+.del-sel-hint  { font-size: .78rem; opacity: .45; }
+.del-action-bar-right { display: flex; gap: .6rem; }
+</style>
+
 <div class="page-header">
   <h1>My Collection
     <span class="badge">{{ cards|length }} cards</span>
   </h1>
-  <a href="{{ url_for('add_card') }}" class="btn btn-primary">+ Add Card</a>
+  <div style="display:flex;gap:.6rem;align-items:center">
+    <button id="del-multi-btn" class="btn btn-outline" onclick="toggleDelMode()">Delete Multiple</button>
+    <a href="{{ url_for('add_card') }}" class="btn btn-primary">+ Add Card</a>
+  </div>
 </div>
 
 <!-- Filters bar -->
@@ -42,7 +168,12 @@
 {% if cards %}
 <div class="card-grid">
   {% for card in cards %}
-  <div class="pokemon-card">
+  <div class="pokemon-card" id="card-{{ card.id }}">
+    <button class="card-delete-btn"
+            onclick="deleteCard({{ card.id }}, '{{ card.name|e }}')"
+            title="Remove from collection">✕</button>
+    <div class="card-select-dot"></div>
+    <div class="card-click-overlay" onclick="toggleCardSelection({{ card.id }})"></div>
     <a href="{{ url_for('view_card', card_id=card.id) }}" class="card-img-link">
       <img src="{{ card.display_image }}" alt="{{ card.name }}"
            onerror="this.src='/static/placeholder.png'">
@@ -86,5 +217,170 @@
   {% endif %}
 </div>
 {% endif %}
+
+<!-- ── Multi-delete action bar ── -->
+<div id="del-action-bar" class="del-action-bar">
+  <div class="del-action-bar-left">
+    <span id="del-sel-count" class="del-sel-count">0 cards selected</span>
+    <span class="del-sel-hint">Click a card to select it</span>
+  </div>
+  <div class="del-action-bar-right">
+    <button class="btn btn-outline" onclick="toggleDelMode()">Cancel</button>
+    <button id="del-confirm-btn" class="btn btn-danger" disabled onclick="confirmMultiDelete()">Delete Selected</button>
+  </div>
+</div>
+
+<script>
+// ── Multi-delete ──────────────────────────────────────────
+let delMode = false;
+const selectedIds = new Set();
+
+function toggleDelMode() {
+  delMode = !delMode;
+  selectedIds.clear();
+  // Clear all visual selections
+  document.querySelectorAll('.pokemon-card.selected')
+          .forEach(c => c.classList.remove('selected'));
+
+  document.body.classList.toggle('del-mode-active', delMode);
+
+  const btn = document.getElementById('del-multi-btn');
+  if (delMode) {
+    btn.textContent = 'Cancel Selection';
+    btn.classList.remove('btn-outline');
+    btn.classList.add('btn-danger');
+  } else {
+    btn.textContent = 'Delete Multiple';
+    btn.classList.remove('btn-danger');
+    btn.classList.add('btn-outline');
+  }
+  updateActionBar();
+}
+
+function toggleCardSelection(cardId) {
+  if (!delMode) return;
+  const card = document.getElementById('card-' + cardId);
+  if (!card) return;
+  if (selectedIds.has(cardId)) {
+    selectedIds.delete(cardId);
+    card.classList.remove('selected');
+  } else {
+    selectedIds.add(cardId);
+    card.classList.add('selected');
+  }
+  updateActionBar();
+}
+
+function updateActionBar() {
+  const bar       = document.getElementById('del-action-bar');
+  const countEl   = document.getElementById('del-sel-count');
+  const confirmBtn= document.getElementById('del-confirm-btn');
+  const n = selectedIds.size;
+
+  countEl.textContent = n === 0
+    ? 'No cards selected'
+    : `${n} card${n !== 1 ? 's' : ''} selected`;
+
+  confirmBtn.disabled = n === 0;
+  confirmBtn.textContent = n > 0 ? `Delete ${n} Card${n !== 1 ? 's' : ''}` : 'Delete Selected';
+  bar.classList.toggle('visible', delMode);
+}
+
+async function confirmMultiDelete() {
+  const n = selectedIds.size;
+  if (n === 0) return;
+
+  const ok = confirm(
+    `You're about to permanently delete ${n} card${n !== 1 ? 's' : ''} from your collection.\n\nThis cannot be undone. Continue?`
+  );
+  if (!ok) return;
+
+  const ids    = [...selectedIds];
+  const badge  = document.querySelector('.page-header .badge');
+  let deleted  = 0;
+
+  // Fire all deletes in parallel
+  await Promise.all(ids.map(async id => {
+    try {
+      const res = await fetch(`/card/${id}/delete`, {
+        method:  'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      if (res.ok || res.redirected) {
+        const el = document.getElementById('card-' + id);
+        if (el) { el.classList.add('deleting'); }
+        deleted++;
+      }
+    } catch { /* skip failed */ }
+  }));
+
+  // After animations settle, clean up DOM
+  setTimeout(() => {
+    ids.forEach(id => {
+      const el = document.getElementById('card-' + id);
+      if (el) el.remove();
+    });
+
+    // Update badge
+    if (badge) {
+      const cur  = parseInt(badge.textContent) || 0;
+      const next = Math.max(0, cur - deleted);
+      badge.textContent = `${next} card${next !== 1 ? 's' : ''}`;
+    }
+
+    // If grid now empty, show empty state
+    const grid = document.querySelector('.card-grid');
+    if (grid && !grid.querySelector('.pokemon-card')) {
+      grid.style.display = 'none';
+      const empty = document.querySelector('.empty-state');
+      if (empty) empty.style.display = '';
+    }
+
+    toggleDelMode(); // exit delete mode
+  }, 280);
+}
+
+// ── Single delete ─────────────────────────────────────────
+async function deleteCard(id, name) {
+  if (!confirm(`Remove "${name}" from your collection?`)) return;
+
+  const el  = document.getElementById('card-' + id);
+  const badge = document.querySelector('.page-header .badge');
+
+  try {
+    const res = await fetch(`/card/${id}/delete`, {
+      method:  'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+
+    if (!res.ok && res.status !== 302) {
+      alert('Could not delete card. Please try again.');
+      return;
+    }
+
+    // Animate out, then remove
+    el.classList.add('deleting');
+    setTimeout(() => {
+      el.remove();
+      // Update the count badge
+      if (badge) {
+        const cur = parseInt(badge.textContent) || 0;
+        const next = Math.max(0, cur - 1);
+        badge.textContent = `${next} card${next !== 1 ? 's' : ''}`;
+      }
+      // If grid is now empty, show the empty state
+      const grid = document.querySelector('.card-grid');
+      if (grid && !grid.querySelector('.pokemon-card')) {
+        grid.style.display = 'none';
+        const empty = document.querySelector('.empty-state');
+        if (empty) empty.style.display = '';
+      }
+    }, 260);
+
+  } catch {
+    alert('Network error — please try again.');
+  }
+}
+</script>
 
 {% endblock %}

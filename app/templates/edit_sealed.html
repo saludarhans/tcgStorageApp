@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="form-page" style="max-width:680px;margin:0 auto">
+  <div class="form-header">
+    <h1>Edit Item</h1>
+    <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline">← Back</a>
+  </div>
+
+  <!-- Read-only summary -->
+  <div class="edit-card-summary">
+    <div class="edit-card-img">
+      <img src="{{ item.image_url or '/static/placeholder.png' }}"
+           alt="{{ item.name }}" onerror="this.src='/static/placeholder.png'">
+    </div>
+    <div class="edit-card-meta">
+      <h2>{{ item.name }}</h2>
+      <div class="edit-meta-grid">
+        {% if item.item_type %}<div class="edit-meta-row"><span class="edit-meta-label">Type</span><span>{{ item.item_type }}</span></div>{% endif %}
+        {% if item.set_name  %}<div class="edit-meta-row"><span class="edit-meta-label">Set</span><span>{{ item.set_name }}</span></div>{% endif %}
+        {% if item.set_code  %}<div class="edit-meta-row"><span class="edit-meta-label">Set Code</span><span>{{ item.set_code | upper }}</span></div>{% endif %}
+        <div class="edit-meta-row"><span class="edit-meta-label">Quantity</span><span>{{ item.quantity }}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <form method="POST" class="card-form">
+
+    <div class="form-section">
+      <h2>Prices &amp; Status</h2>
+      <div class="form-row-2">
+        <div class="form-group">
+          <label>Purchase Price ($)</label>
+          <input type="number" name="purchase_price" class="form-control"
+                 step="0.01" min="0" placeholder="0.00"
+                 value="{{ item.purchase_price or '' }}">
+        </div>
+        <div class="form-group">
+          <label>Market Price ($)</label>
+          <input type="number" name="market_price" class="form-control"
+                 step="0.01" min="0" placeholder="0.00"
+                 value="{{ item.market_price or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="check-label">
+          <input type="checkbox" name="is_opened" {% if item.is_opened %}checked{% endif %}>
+          Already opened
+        </label>
+      </div>
+    </div>
+
+    <div class="form-section">
+      <h2>Notes</h2>
+      <div class="form-group">
+        <textarea name="notes" class="form-control" rows="4"
+                  placeholder="Any notes…">{{ item.notes or '' }}</textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary btn-lg">Save Changes</button>
+      <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline btn-lg">Cancel</a>
+    </div>
+
+  </form>
+</div>
+{% endblock %}

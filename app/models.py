@@ -19,7 +19,8 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), default='collector')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    cards = db.relationship('Card', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
+    cards        = db.relationship('Card',       backref='owner',  lazy='dynamic', cascade='all, delete-orphan')
+    sealed_items = db.relationship('SealedItem', backref='owner',  lazy='dynamic', cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -40,6 +41,31 @@ class User(UserMixin, db.Model):
 
     def __repr__(self):
         return f'<User {self.username}>'
+
+
+class SealedCatalog(db.Model):
+    """Master list of every known sealed product across all tracked sets."""
+    __tablename__ = 'sealed_catalog'
+
+    id        = db.Column(db.Integer, primary_key=True)
+    name      = db.Column(db.String(200), nullable=False, index=True)
+    item_type = db.Column(db.String(60),  nullable=False, index=True)
+    set_name  = db.Column(db.String(100), index=True)
+    set_code  = db.Column(db.String(20),  index=True)
+    # Comma-padded list of ALL set codes this product is associated with.
+    # Format: ",sv1,sv2,"  — allows LIKE '%,sv1,%' filtering without false positives.
+    set_codes = db.Column(db.Text)
+    image_url = db.Column(db.String(500))
+
+    def to_dict(self):
+        return {
+            'id':        self.id,
+            'name':      self.name,
+            'item_type': self.item_type,
+            'set_name':  self.set_name,
+            'set_code':  self.set_code,
+            'image_url': self.image_url or '',
+        }
 
 
 class CardCatalog(db.Model):
@@ -89,6 +115,39 @@ class CardCatalog(db.Model):
         return f'<CardCatalog {self.tcg_id} {self.name}>'
 
 
+class SealedItem(db.Model):
+    """A sealed (unopened or tracked) TCG product — pack, box, ETB, etc."""
+    __tablename__ = 'sealed_items'
+
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    name       = db.Column(db.String(200), nullable=False)
+    item_type  = db.Column(db.String(60))   # Booster Pack, Blister, Booster Box, ETB, …
+    set_name   = db.Column(db.String(100))
+    set_code   = db.Column(db.String(20))
+
+    quantity       = db.Column(db.Integer, default=1)
+    purchase_price = db.Column(db.Float)
+    market_price   = db.Column(db.Float)
+    is_opened      = db.Column(db.Boolean, default=False)
+
+    image_url  = db.Column(db.String(500))
+    notes      = db.Column(db.Text)
+
+    added_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def profit_loss(self):
+        if self.purchase_price and self.market_price:
+            return (self.market_price - self.purchase_price) * self.quantity
+        return None
+
+    def __repr__(self):
+        return f'<SealedItem {self.item_type} {self.name}>'
+
+
 class SetReference(db.Model):
     """Master list of every TCG set — used to populate form dropdowns."""
     __tablename__ = 'set_references'
@@ -124,6 +183,7 @@ class Card(db.Model):
     is_foil      = db.Column(db.Boolean, default=False)
     is_graded    = db.Column(db.Boolean, default=False)
     grade        = db.Column(db.String(10))
+    is_xl        = db.Column(db.Boolean, default=False)  # oversized / jumbo card
 
     purchase_price    = db.Column(db.Float)
     market_price      = db.Column(db.Float)

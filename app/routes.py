@@ -7,7 +7,7 @@ from sqlalchemy import text
 from werkzeug.utils import secure_filename
 
 from app import app, db
-from app.models import User, Card, CardCatalog
+from app.models import User, Card, CardCatalog, SealedItem, SealedCatalog
 from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, shorten_set_name
 
 SET_CODE_TO_NAME = {code: shorten_set_name(name) for code, name in ALL_SETS}
@@ -99,14 +99,19 @@ def logout():
 @app.route('/')
 @login_required
 def dashboard():
-    cards = current_user.cards.order_by(Card.added_at.desc()).all()
+    cards  = current_user.cards.order_by(Card.added_at.desc()).all()
+    sealed = current_user.sealed_items.order_by(SealedItem.added_at.desc()).all()
 
-    total_cards = len(cards)
+    total_cards    = len(cards)
     unique_pokemon = len(set(c.name.lower() for c in cards))
-    total_value = sum((c.market_price or 0) * c.quantity for c in cards)
-    total_cost = sum((c.purchase_price or 0) * c.quantity for c in cards)
-    cards_with_cost = [c for c in cards if c.purchase_price]
-    profit_loss = (total_value - total_cost) if cards_with_cost else None
+    sealed_count   = sum(s.quantity for s in sealed)
+
+    total_value = (sum((c.market_price or 0) * c.quantity for c in cards)
+                 + sum((s.market_price or 0) * s.quantity for s in sealed))
+    total_cost  = (sum((c.purchase_price or 0) * c.quantity for c in cards)
+                 + sum((s.purchase_price or 0) * s.quantity for s in sealed))
+    has_cost    = any(c.purchase_price for c in cards) or any(s.purchase_price for s in sealed)
+    profit_loss = (total_value - total_cost) if has_cost else None
 
     # Top 5 most valuable
     top_cards = sorted([c for c in cards if c.market_price], key=lambda c: c.market_price, reverse=True)[:5]
@@ -129,8 +134,10 @@ def dashboard():
     return render_template('dashboard.html',
                            title='My Collection',
                            cards=cards,
+                           sealed=sealed,
                            total_cards=total_cards,
                            unique_pokemon=unique_pokemon,
+                           sealed_count=sealed_count,
                            total_value=total_value,
                            total_cost=total_cost,
                            profit_loss=profit_loss,
@@ -209,11 +216,21 @@ def search():
 
 # ─── Card CRUD ───────────────────────────────────────────────────────────────
 
+def _era_for(code):
+    if code in ('svp', 'swshp', 'smp', 'xyp', 'bwp'):              return 'promo'
+    if code.startswith('me'):                                        return 'me'
+    if code.startswith('swsh') or code in ('cel25', 'pgo'):         return 'swsh'
+    if code.startswith('sv') or code.startswith('rsv') or code.startswith('zsv'): return 'sv'
+    if code.startswith('sm'):                                        return 'sm'
+    if code.startswith('xy'):                                        return 'xy'
+    return 'other'
+
 @app.route('/card/add')
 @login_required
 def add_card():
     short_sets = [(code, shorten_set_name(label)) for code, label in ALL_SETS]
-    return render_template('add_card.html', title='Add Card', all_sets=short_sets)
+    set_eras   = {code: _era_for(code) for code, _ in ALL_SETS}
+    return render_template('add_card.html', title='Add Card', all_sets=short_sets, set_eras=set_eras)
 
 
 @app.route('/card/<int:card_id>')
@@ -440,6 +457,7 @@ def quick_add_card():
     card.variant        = data.get('variant') or detect_variant(card.name, card.rarity, card.is_foil)
     card.is_graded      = bool(data.get('is_graded', False))
     card.grade          = data.get('grade')
+    card.is_xl          = bool(data.get('is_xl', False))
     card.notes          = data.get('notes', '')
     if card.market_price:
         card.last_price_update = datetime.utcnow()
@@ -447,3 +465,112 @@ def quick_add_card():
     db.session.add(card)
     db.session.commit()
     return jsonify({'ok': True, 'redirect': url_for('view_card', card_id=card.id)})
+
+
+# ─── Sealed Items ─────────────────────────────────────────────────────────────
+
+ITEM_TYPES = [
+    'Booster Pack', 'Blister Pack', 'Booster Box', 'Elite Trainer Box',
+    'Super Premium Collection', 'Premium Collection', 'Collection Box',
+    'Tin', 'Bundle', 'Gift Box', 'Other',
+]
+
+@app.route('/sealed/add')
+@login_required
+def add_sealed():
+    short_sets = [(code, shorten_set_name(label)) for code, label in ALL_SETS]
+    item_types = SealedCatalog.query.with_entities(SealedCatalog.item_type).distinct().order_by(SealedCatalog.item_type).all()
+    item_types = [r[0] for r in item_types]
+    return render_template('add_sealed.html', title='Add Item',
+                           all_sets=short_sets, item_types=item_types)
+
+
+@app.route('/api/sealed-catalog')
+@login_required
+def sealed_catalog_search():
+    set_code  = request.args.get('set_code', '').strip()
+    item_type = request.args.get('item_type', '').strip()
+    name      = request.args.get('name', '').strip()
+
+    q = SealedCatalog.query
+    if set_code:
+        # Match the primary set OR any secondary set in the comma-padded set_codes field.
+        # set_codes is stored as ",sv1,sv2," so we search for ",sv1,"
+        padded = f',{set_code},'
+        q = q.filter(
+            db.or_(
+                SealedCatalog.set_code == set_code,
+                SealedCatalog.set_codes.like(f'%{padded}%'),
+            )
+        )
+    if item_type: q = q.filter(SealedCatalog.item_type == item_type)
+    if name:      q = q.filter(SealedCatalog.name.ilike(f'%{name}%'))
+
+    items = q.order_by(SealedCatalog.item_type, SealedCatalog.name).all()
+    return jsonify({'data': [i.to_dict() for i in items], 'total': len(items)})
+
+
+@app.route('/api/sealed/quick-add', methods=['POST'])
+@login_required
+def sealed_quick_add():
+    data = request.get_json(force=True)
+    if not data or not data.get('name'):
+        return jsonify({'ok': False, 'error': 'No item data'}), 400
+
+    item = SealedItem(user_id=current_user.id)
+    item.name           = data['name']
+    item.item_type      = data.get('item_type', '')
+    item.set_name       = data.get('set_name', '')
+    item.set_code       = data.get('set_code', '')
+    item.image_url      = data.get('image_url', '')
+    item.quantity       = max(1, int(data.get('quantity', 1) or 1))
+    pp = data.get('purchase_price')
+    mp = data.get('market_price')
+    item.purchase_price = float(pp) if pp else None
+    item.market_price   = float(mp) if mp else None
+    item.notes          = data.get('notes', '')
+    item.is_opened      = bool(data.get('is_opened', False))
+
+    db.session.add(item)
+    db.session.commit()
+    return jsonify({'ok': True, 'redirect': url_for('view_sealed', item_id=item.id)})
+
+
+@app.route('/sealed/<int:item_id>')
+@login_required
+def view_sealed(item_id):
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    return render_template('view_sealed.html', title=item.name, item=item)
+
+
+@app.route('/sealed/<int:item_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_sealed(item_id):
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    if request.method == 'POST':
+        item.purchase_price = float(p) if (p := request.form.get('purchase_price', '').strip()) else None
+        item.market_price   = float(p) if (p := request.form.get('market_price', '').strip()) else None
+        item.is_opened      = bool(request.form.get('is_opened'))
+        item.notes          = request.form.get('notes', '').strip()
+        item.updated_at     = datetime.utcnow()
+        db.session.commit()
+        flash(f'"{item.name}" updated.', 'success')
+        return redirect(url_for('view_sealed', item_id=item.id))
+    return render_template('edit_sealed.html', title='Edit Item', item=item)
+
+
+@app.route('/sealed/<int:item_id>/delete', methods=['POST'])
+@login_required
+def delete_sealed(item_id):
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    name = item.name
+    db.session.delete(item)
+    db.session.commit()
+    flash(f'"{name}" removed from your collection.', 'info')
+    return redirect(url_for('collection'))

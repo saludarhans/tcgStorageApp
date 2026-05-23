@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card-detail">
+  <div class="card-detail-img-col">
+    <div class="detail-img-wrap">
+      <img src="{{ item.image_url or '/static/placeholder.png' }}"
+           alt="{{ item.name }}" onerror="this.src='/static/placeholder.png'">
+    </div>
+    {% if item.is_opened %}
+    <div class="grade-badge-large" style="background:rgba(255,255,255,0.1)">Opened</div>
+    {% endif %}
+  </div>
+
+  <div class="card-detail-info-col">
+    <div class="detail-header">
+      <h1>{{ item.name }}</h1>
+    </div>
+
+    <div class="detail-actions">
+      <a href="{{ url_for('edit_sealed', item_id=item.id) }}" class="btn btn-outline">Edit</a>
+      <form action="{{ url_for('delete_sealed', item_id=item.id) }}" method="POST"
+            onsubmit="return confirm('Remove {{ item.name }} from your collection?')">
+        <button type="submit" class="btn btn-danger">Delete</button>
+      </form>
+    </div>
+
+    <div class="detail-grid">
+      {% macro row(label, value) %}
+        {% if value %}
+        <div class="detail-row">
+          <span class="detail-label">{{ label }}</span>
+          <span class="detail-value">{{ value }}</span>
+        </div>
+        {% endif %}
+      {% endmacro %}
+
+      {{ row('Type',     item.item_type) }}
+      {{ row('Set',      item.set_name) }}
+      {{ row('Set Code', item.set_code | upper if item.set_code) }}
+      {{ row('Quantity', item.quantity) }}
+      <div class="detail-row">
+        <span class="detail-label">Status</span>
+        <span class="detail-value">{{ 'Opened' if item.is_opened else 'Sealed' }}</span>
+      </div>
+    </div>
+
+    <div class="price-section">
+      <div class="price-box">
+        <span class="price-label">Market Value</span>
+        <span class="price-main">
+          {% if item.market_price %}${{ "%.2f"|format(item.market_price) }}{% else %}—{% endif %}
+        </span>
+      </div>
+      <div class="price-box">
+        <span class="price-label">Purchase Price</span>
+        <span class="price-secondary">
+          {% if item.purchase_price %}${{ "%.2f"|format(item.purchase_price) }}{% else %}—{% endif %}
+        </span>
+      </div>
+      {% if item.profit_loss is not none %}
+      <div class="price-box {% if item.profit_loss >= 0 %}gain{% else %}loss{% endif %}">
+        <span class="price-label">Gain / Loss</span>
+        <span class="price-secondary">
+          {{ '+' if item.profit_loss >= 0 else '' }}${{ "%.2f"|format(item.profit_loss) }}
+        </span>
+      </div>
+      {% endif %}
+    </div>
+
+    {% if item.notes %}
+    <div class="detail-notes">
+      <h3>Notes</h3>
+      <p>{{ item.notes }}</p>
+    </div>
+    {% endif %}
+
+    <p class="detail-meta-footer">
+      Added {{ item.added_at.strftime('%B %d, %Y') }}
+    </p>
+  </div>
+</div>
+
+{% if item.market_price and item.purchase_price %}
+{% set pct = ((item.market_price - item.purchase_price) / item.purchase_price * 100) %}
+{% set gained = pct >= 0 %}
+<div class="price-change-card">
+  <div class="pc-header">
+    <h2>Price Change</h2>
+    <span class="pc-since">vs. purchase price</span>
+  </div>
+  <div class="pc-hero">
+    <span class="pc-arrow {{ 'pc-up' if gained else 'pc-down' }}">{{ '▲' if gained else '▼' }}</span>
+    <span class="pc-pct {{ 'pc-gain' if gained else 'pc-loss' }}">
+      {{ '+' if gained else '' }}{{ "%.1f"|format(pct) }}%
+    </span>
+    <span class="pc-delta {{ 'pc-gain' if gained else 'pc-loss' }}">
+      ({{ '+' if gained else '' }}${{ "%.2f"|format((item.market_price - item.purchase_price) * item.quantity) }})
+    </span>
+  </div>
+  <div class="pc-bar-section">
+    {% set hi = [item.purchase_price, item.market_price] | max %}
+    <div class="pc-bar-row">
+      <span class="pc-bar-label">Paid</span>
+      <div class="pc-bar-track">
+        <div class="pc-bar pc-bar-paid"
+             style="width:{{ ((item.purchase_price / hi)*100)|round|int }}%"></div>
+      </div>
+      <span class="pc-bar-val">${{ "%.2f"|format(item.purchase_price) }}</span>
+    </div>
+    <div class="pc-bar-row">
+      <span class="pc-bar-label">Market</span>
+      <div class="pc-bar-track">
+        <div class="pc-bar {{ 'pc-bar-up' if gained else 'pc-bar-down' }}"
+             style="width:{{ ((item.market_price / hi)*100)|round|int }}%"></div>
+      </div>
+      <span class="pc-bar-val">${{ "%.2f"|format(item.market_price) }}</span>
+    </div>
+  </div>
+</div>
+
+<style>
+.price-change-card{margin-top:2rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.75rem}
+.pc-header{display:flex;align-items:baseline;gap:.75rem;margin-bottom:1.25rem}
+.pc-header h2{margin:0;font-size:1.1rem}
+.pc-since{font-size:.78rem;color:var(--muted)}
+.pc-hero{display:flex;align-items:center;gap:.6rem;margin-bottom:1.5rem}
+.pc-arrow{font-size:1.4rem;line-height:1}
+.pc-pct{font-size:2rem;font-weight:800;line-height:1}
+.pc-delta{font-size:1rem;color:var(--muted);align-self:flex-end;padding-bottom:3px}
+.pc-gain{color:#4ade80}.pc-loss{color:#f87171}.pc-up{color:#4ade80}.pc-down{color:#f87171}
+.pc-bar-section{display:flex;flex-direction:column;gap:10px}
+.pc-bar-row{display:flex;align-items:center;gap:10px}
+.pc-bar-label{width:52px;font-size:.78rem;color:var(--muted);text-align:right;flex-shrink:0}
+.pc-bar-track{flex:1;height:10px;background:rgba(255,255,255,.07);border-radius:999px;overflow:hidden}
+.pc-bar{height:100%;border-radius:999px;transition:width .6s ease}
+.pc-bar-paid{background:rgba(255,255,255,.25)}.pc-bar-up{background:#4ade80}.pc-bar-down{background:#f87171}
+.pc-bar-val{width:56px;font-size:.8rem;font-weight:600;flex-shrink:0}
+</style>
+{% endif %}
+
+{% endblock %}

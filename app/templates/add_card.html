@@ -116,6 +116,29 @@
 .q-ctrl-qty   { flex: 0 0 54px; }
 .q-ctrl-comp  { flex: 1; }
 .q-ctrl-grade { flex: 0 0 54px; }
+.q-xl-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
+  color: var(--muted);
+  cursor: pointer;
+  letter-spacing: .04em;
+  transition: background .15s, border-color .15s, color .15s;
+  align-self: flex-end;
+  margin-bottom: 1px;
+}
+.q-xl-toggle.on {
+  background: rgba(251,146,60,.18);
+  border-color: #fb923c;
+  color: #fb923c;
+}
 .q-variant-fixed {
   display: inline-block;
   padding: 4px 6px;
@@ -209,12 +232,45 @@
 .picker-card-meta  { font-size: 0.68rem; color: #fff; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picker-card-price { font-size: 0.82rem; font-weight: 700; color: #60a5fa; margin-top: 5px; }
 
+/* ── XL badge on grid cards ─────────────────────────────── */
+.picker-card-xl-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 10;
+  pointer-events: auto;
+  background: rgba(0,0,0,0.65);
+  border: 1.5px solid rgba(255,255,255,0.18);
+  border-radius: 14px;
+  color: rgba(255,255,255,0.55);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  padding: 2px 7px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.picker-card:hover .picker-card-xl-btn { opacity: 1; }
+.picker-card-xl-btn:hover {
+  background: rgba(251,146,60,.85);
+  border-color: #fb923c;
+  color: #fff;
+}
+
 /* queued flash — box-shadow so it works with overflow:hidden */
 @keyframes q-flash {
   0%,100% { box-shadow: 0 0 0 2px transparent; }
   35%     { box-shadow: 0 0 0 2px #60a5fa, 0 0 14px rgba(96,165,250,.45); }
 }
 .picker-card.q-flash { animation: q-flash 0.5s ease-out forwards; }
+
+@keyframes q-flash-xl {
+  0%,100% { box-shadow: 0 0 0 2px transparent; }
+  35%     { box-shadow: 0 0 0 2px #fb923c, 0 0 14px rgba(251,146,60,.45); }
+}
+.picker-card.q-flash-xl { animation: q-flash-xl 0.5s ease-out forwards; }
 </style>
 
 <div class="picker-page">
@@ -236,7 +292,9 @@
           <option value="xy">XY (2014–2016)</option>
           <option value="sm">Sun &amp; Moon (2017–2019)</option>
           <option value="swsh">Sword &amp; Shield (2020–2023)</option>
-          <option value="sv">Scarlet &amp; Violet (2023–2026)</option>
+          <option value="sv">Scarlet &amp; Violet (2023–2025)</option>
+          <option value="me">Mega Evolution (2025–)</option>
+          <option value="promo">Promos</option>
         </select>
       </div>
       <div class="picker-field">
@@ -244,10 +302,7 @@
         <select id="f-set" class="form-control">
           <option value="">All sets</option>
           {% for code, label in all_sets %}
-          <option value="{{ code }}"
-            data-era="{{ code[:2] if not code.startswith('swsh') and not code.startswith('cel') and not code.startswith('pgo') else ('swsh' if code.startswith('swsh') or code in ['cel25','pgo'] else code[:2]) }}">
-            {{ label }}
-          </option>
+          <option value="{{ code }}" data-era="{{ set_eras[code] }}">{{ label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -281,7 +336,7 @@
       <span   id="page-info" class="page-info"></span>
       <button id="btn-next" class="btn btn-outline btn-sm">Next →</button>
     </div>
-  </div>
+  </div><!-- /results-area -->
 
 </div><!-- /picker-main -->
 
@@ -309,7 +364,7 @@
 <script>
 let currentPage   = 1;
 let totalPages    = 1;
-let queueItems    = [];   // { uid, card, qty, gradeCompany, grade }
+let queueItems    = [];   // { uid, card, qty, gradeCompany, grade, variant, isXl }
 let nextUid       = 0;
 
 const el = id => document.getElementById(id);
@@ -444,12 +499,25 @@ function renderGrid(cards) {
         <div class="picker-card-name">${card.name}</div>
         <div class="picker-card-meta">${meta}</div>
         ${price ? `<div class="picker-card-price">$${price}</div>` : ''}
-      </div>`;
-    btn.addEventListener('click', () => {
-      addToQueue(card);
+      </div>
+      <button class="picker-card-xl-btn" title="Add as XL / oversized card">XL</button>`;
+
+    // Normal click → add as regular card
+    btn.addEventListener('click', e => {
+      if (e.target.closest('.picker-card-xl-btn')) return; // handled below
+      addToQueue(card, false);
       btn.classList.add('q-flash');
       setTimeout(() => btn.classList.remove('q-flash'), 550);
     });
+
+    // XL button click → add as XL card
+    btn.querySelector('.picker-card-xl-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      addToQueue(card, true);
+      btn.classList.add('q-flash-xl');
+      setTimeout(() => btn.classList.remove('q-flash-xl'), 550);
+    });
+
     grid.appendChild(btn);
   });
   grid.style.display = 'grid';
@@ -501,10 +569,15 @@ function getAvailableVariants(name, rarity) {
 
 // ── Queue ─────────────────────────────────────────────────
 
-function addToQueue(card) {
-  const available  = getAvailableVariants(card.name, card.rarity);
+function addToQueue(card, isXl = false) {
+  const available   = getAvailableVariants(card.name, card.rarity);
   const autoVariant = available[0];
-  queueItems.push({ uid: nextUid++, card, qty: 1, gradeCompany: '', grade: '', variant: autoVariant, availableVariants: available });
+  queueItems.push({
+    uid: nextUid++, card, qty: 1,
+    gradeCompany: '', grade: '',
+    variant: autoVariant, availableVariants: available,
+    isXl: !!isXl,
+  });
   syncQueue();
 }
 
@@ -577,6 +650,10 @@ function syncQueue() {
             : `<span class="q-variant-fixed">${item.variant}</span>`
           }
         </div>
+        <button class="q-xl-toggle ${item.isXl ? 'on' : ''}"
+                data-uid="${item.uid}" title="Mark as XL / oversized card">
+          XL
+        </button>
       </div>`;
     list.appendChild(row);
   });
@@ -605,6 +682,16 @@ function syncQueue() {
     };
     node.addEventListener('change', update);
     node.addEventListener('input',  update);
+  });
+
+  list.querySelectorAll('.q-xl-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const uid  = parseInt(btn.dataset.uid);
+      const item = queueItems.find(i => i.uid === uid);
+      if (!item) return;
+      item.isXl = !item.isXl;
+      btn.classList.toggle('on', item.isXl);
+    });
   });
 
   list.querySelectorAll('.q-remove').forEach(btn => {
@@ -639,8 +726,9 @@ async function saveAll() {
 
   for (const item of queueItems) {
     btn.textContent = `Saving ${saved + failed.length + 1} / ${total}…`;
-    const { card, qty, gradeCompany, grade, variant } = item;
+    const { card, qty, gradeCompany, grade, variant, isXl, isFoil } = item;
     const gradeStr = gradeCompany && grade ? `${gradeCompany} ${grade}` : (gradeCompany || null);
+    const autoFoil = (card.rarity || '').toLowerCase().includes('holo');
     const payload  = {
       name:         card.name,
       card_number:  card.number,
@@ -655,8 +743,9 @@ async function saveAll() {
       market_price: parseFloat(getBestPrice(card)) || null,
       is_graded:    !!gradeCompany,
       grade:        gradeStr,
-      is_foil:      (card.rarity || '').toLowerCase().includes('holo'),
+      is_foil:      isFoil !== undefined ? !!isFoil : autoFoil,
       variant:      variant || null,
+      is_xl:        !!isXl,
     };
     try {
       const res  = await fetch('/api/cards/quick-add', {

@@ -78,12 +78,18 @@ ALL_SETS = [
     ("sv8pt5",   "Prismatic Evolutions (2025)"),
     ("sv9",      "Scarlet & Violet Journey Together (2025)"),
     ("sv10",     "Scarlet & Violet Destined Rivals (2025)"),
-    ("sv10pt5",  "Mega Evolution (2025)"),
-    ("sv11wf",   "White Flare (2025)"),
-    ("sv11bb",   "Black Bolt (2025)"),
-    ("sv12",     "Phantasmal Flames (2025)"),
-    ("sv13",     "Ascended Heroes (2026)"),
-    ("sv14",     "Perfect Order (2026)"),
+    ("rsv10pt5", "White Flare (2025)"),
+    ("zsv10pt5", "Black Bolt (2025)"),
+    ("me1",      "Mega Evolution (2025)"),
+    ("me2",      "Phantasmal Flames (2025)"),
+    ("me2pt5",   "Ascended Heroes (2026)"),
+    ("me3",      "Perfect Order (2026)"),
+    ("me4",      "Chaos Rising (2026)"),
+    # Promo sets
+    ("svp",      "Scarlet & Violet Promos"),
+    ("swshp",    "Sword & Shield Promos"),
+    ("smp",      "Sun & Moon Promos"),
+    ("xyp",      "XY Promos"),
 ]
 
 SET_CHOICES = [('', '— select set —')] + [(code, shorten_set_name(label)) for code, label in ALL_SETS]

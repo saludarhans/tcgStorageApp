@@ -1,0 +1,568 @@
+{% extends "base.html" %}
+{% block content %}
+
+<style>
+/* ── Page layout ───────────────────────────────────────────── */
+.sealed-page {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.sealed-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1.25rem; }
+
+/* ── Tabs ──────────────────────────────────────────────────── */
+.tab-bar {
+  display: flex;
+  gap: .5rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--muted);
+  font-size: .9rem;
+  font-weight: 600;
+  padding: .55rem 1.1rem;
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition: color .15s, border-color .15s;
+}
+.tab-btn:hover  { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Search panel ──────────────────────────────────────────── */
+.sealed-search-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.5rem;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: .75rem;
+}
+.sealed-field { display: flex; flex-direction: column; gap: .3rem; flex: 1; min-width: 0; }
+.sealed-field label { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.sealed-actions { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+
+/* ── Results ───────────────────────────────────────────────── */
+.sealed-results-area {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 1rem;
+  min-height: 200px;
+}
+.sealed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+/* ── Product card ──────────────────────────────────────────── */
+.product-card {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: #0d1117;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color .15s;
+}
+.product-card:hover { border-color: var(--accent); }
+.product-card img {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+  padding: 6px;
+  transition: transform .25s;
+}
+.product-card:hover img { transform: scale(1.04); }
+.product-card-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 8px;
+  background: linear-gradient(to top, rgba(0,0,0,.9) 0%, rgba(0,0,0,.5) 50%, transparent 100%);
+  opacity: 0; transition: opacity .2s;
+}
+.product-card:hover .product-card-overlay { opacity: 1; }
+.product-card-name { font-size: .7rem; font-weight: 700; color: #fff; line-height: 1.2; }
+.product-type-badge {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(0,0,0,.7);
+  color: #fff; font-size: .62rem; font-weight: 600;
+  padding: 2px 6px; border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+
+/* ── Custom item panel ─────────────────────────────────────── */
+.custom-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.custom-panel h3 { font-size: .85rem; color: var(--muted); font-weight: 600; margin: 0; }
+.custom-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .9rem;
+}
+.custom-field {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.custom-field.full { grid-column: 1 / -1; }
+.custom-field label { font-size: .8rem; font-weight: 600; color: var(--muted); }
+.custom-field input,
+.custom-field select,
+.custom-field textarea {
+  padding: 7px 10px;
+  font-size: .88rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: inherit;
+  width: 100%;
+}
+.custom-field textarea { resize: vertical; }
+.custom-check { display: flex; align-items: center; gap: .5rem; font-size: .85rem; }
+.custom-img-preview {
+  width: 100%; max-height: 120px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255,255,255,.04);
+  padding: 6px;
+  display: none;
+  margin-top: .4rem;
+}
+.custom-actions {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding-top: .5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.sealed-sidebar {
+  width: 280px;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(var(--nav-h) + 1rem);
+  max-height: calc(100vh - var(--nav-h) - 2rem);
+  overflow-y: auto;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  font-weight: 700;
+  font-size: 1rem;
+}
+.sidebar-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  padding: 2rem 1rem; text-align: center;
+  font-size: .82rem; opacity: .4;
+}
+.sidebar-selected { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.sel-img-wrap { display: flex; justify-content: center; }
+.sel-img-wrap img {
+  width: 100%; max-width: 180px;
+  border-radius: 8px; object-fit: contain;
+  background: rgba(255,255,255,.04);
+}
+.sel-name   { font-weight: 700; font-size: .95rem; text-align: center; }
+.sel-meta   { font-size: .75rem; color: var(--muted); text-align: center; }
+.sel-fields { display: flex; flex-direction: column; gap: 8px; }
+.sel-field  { display: flex; flex-direction: column; gap: 3px; }
+.sel-field label { font-size: .7rem; color: var(--muted); font-weight: 600; }
+.sel-field input, .sel-field textarea {
+  padding: 5px 8px; font-size: .82rem;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.07); color: inherit; width: 100%;
+}
+.sel-check { display: flex; align-items: center; gap: 6px; font-size: .8rem; }
+.sidebar-footer {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,.08);
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* ── States ────────────────────────────────────────────────── */
+.sealed-empty, .sealed-loading {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 3rem 1rem; gap: .75rem;
+  text-align: center; color: var(--muted);
+}
+.spinner { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.1);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.search-status { font-size: .85rem; color: var(--muted); }
+.product-card.active { border-color: var(--accent); }
+.product-card.active img { transform: scale(1.04); }
+</style>
+
+<div class="sealed-page">
+<div class="sealed-main">
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tab-catalog" onclick="switchTab('catalog')">Search Catalog</button>
+    <button class="tab-btn" id="tab-custom" onclick="switchTab('custom')">Custom Item</button>
+  </div>
+
+  <!-- ── CATALOG SECTION ───────────────────────────────────── -->
+  <div id="section-catalog">
+    <div class="sealed-search-panel">
+      <div class="sealed-field">
+        <label>Set</label>
+        <select id="f-set" class="form-control">
+          <option value="">All sets</option>
+          {% for code, label in all_sets %}
+          <option value="{{ code }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="sealed-field">
+        <label>Item Type</label>
+        <select id="f-type" class="form-control">
+          <option value="">All types</option>
+          {% for t in item_types %}
+          <option value="{{ t }}">{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="sealed-field">
+        <label>Search</label>
+        <input id="f-name" type="text" class="form-control" placeholder="e.g. Pikachu">
+      </div>
+      <div class="sealed-actions">
+        <button id="btn-search" class="btn btn-primary">Search</button>
+        <button id="btn-clear"  class="btn btn-outline">Clear</button>
+        <span id="search-status" class="search-status"></span>
+      </div>
+    </div>
+
+    <div class="sealed-results-area">
+      <div id="results-empty" class="sealed-empty">
+        <p>Select a set or type and press Search</p>
+      </div>
+      <div id="results-loading" class="sealed-loading" style="display:none">
+        <div class="spinner"></div><p>Loading…</p>
+      </div>
+      <div id="results-grid" class="sealed-grid" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ── CUSTOM ITEM SECTION ──────────────────────────────── -->
+  <div id="section-custom" style="display:none">
+    <div class="custom-panel">
+      <h3>Fill in the details for your item, then click Add to Collection.</h3>
+      <div class="custom-fields">
+
+        <div class="custom-field full">
+          <label>Item Name *</label>
+          <input id="c-name" type="text" placeholder="e.g. Celebrations Ultra Premium Collection">
+        </div>
+
+        <div class="custom-field">
+          <label>Item Type</label>
+          <input id="c-type" type="text" placeholder="e.g. Booster Box, Tin, Blister…">
+        </div>
+
+        <div class="custom-field">
+          <label>Set</label>
+          <select id="c-set">
+            <option value="" data-name="">— select set —</option>
+            {% for code, label in all_sets %}
+            <option value="{{ code }}" data-name="{{ label }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="custom-field">
+          <label>Quantity</label>
+          <input id="c-qty" type="number" min="1" value="1">
+        </div>
+
+        <div class="custom-field">
+          <label>Purchase Price ($)</label>
+          <input id="c-pp" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+
+        <div class="custom-field">
+          <label>Market Price ($)</label>
+          <input id="c-mp" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+
+        <div class="custom-field full">
+          <label>Image URL <span style="opacity:.5;font-weight:400">(optional)</span></label>
+          <input id="c-img" type="text" placeholder="https://…" oninput="previewImg()">
+          <img id="c-img-preview" class="custom-img-preview" alt="preview" onerror="this.style.display='none'">
+        </div>
+
+        <div class="custom-field full" style="display:flex;flex-direction:row;align-items:center;gap:1rem">
+          <label class="custom-check">
+            <input id="c-opened" type="checkbox"> Already opened
+          </label>
+        </div>
+
+        <div class="custom-field full">
+          <label>Notes <span style="opacity:.5;font-weight:400">(optional)</span></label>
+          <textarea id="c-notes" rows="2" placeholder="Optional notes…"></textarea>
+        </div>
+
+      </div>
+      <div class="custom-actions">
+        <button id="btn-custom-save" class="btn btn-primary">Add to Collection</button>
+        <span id="custom-status" style="font-size:.85rem;color:var(--muted)"></span>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /sealed-main -->
+
+<!-- Sidebar (catalog mode only) -->
+<aside class="sealed-sidebar" id="catalog-sidebar">
+  <div class="sidebar-header">Selected Item</div>
+  <div id="sidebar-empty" class="sidebar-empty">
+    <p>Click a product to select it</p>
+  </div>
+  <div id="sidebar-selected" class="sidebar-selected" style="display:none">
+    <div class="sel-img-wrap">
+      <img id="sel-img" src="/static/placeholder.png" alt="">
+    </div>
+    <div id="sel-name" class="sel-name"></div>
+    <div id="sel-meta" class="sel-meta"></div>
+    <div class="sel-fields">
+      <div class="sel-field">
+        <label>Quantity</label>
+        <input id="sel-qty" type="number" min="1" value="1">
+      </div>
+      <div class="sel-field">
+        <label>Purchase Price ($)</label>
+        <input id="sel-pp" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <div class="sel-field">
+        <label>Market Price ($)</label>
+        <input id="sel-mp" type="number" step="0.01" min="0" placeholder="0.00">
+      </div>
+      <label class="sel-check">
+        <input id="sel-opened" type="checkbox"> Already opened
+      </label>
+      <div class="sel-field">
+        <label>Notes</label>
+        <textarea id="sel-notes" rows="2" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+  </div>
+  <div id="sidebar-footer" class="sidebar-footer" style="display:none">
+    <button id="btn-save" class="btn btn-primary" style="width:100%">Add to Collection</button>
+  </div>
+</aside>
+
+</div><!-- /sealed-page -->
+
+<script>
+const el = id => document.getElementById(id);
+let selected = null;
+
+// ── Tab switching ────────────────────────────────────────────
+function switchTab(tab) {
+  const isCatalog = tab === 'catalog';
+  el('tab-catalog').classList.toggle('active', isCatalog);
+  el('tab-custom').classList.toggle('active', !isCatalog);
+  el('section-catalog').style.display = isCatalog ? '' : 'none';
+  el('section-custom').style.display  = isCatalog ? 'none' : '';
+  el('catalog-sidebar').style.display = isCatalog ? '' : 'none';
+}
+
+// ── Catalog: event listeners ─────────────────────────────────
+el('btn-search').addEventListener('click', doSearch);
+el('btn-clear').addEventListener('click', () => {
+  ['f-set','f-type','f-name'].forEach(id => { el(id).value = ''; });
+  showEmpty('Select a set or type and press Search');
+  el('search-status').textContent = '';
+});
+el('f-name').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+el('btn-save').addEventListener('click', saveItem);
+
+// ── Catalog: search ──────────────────────────────────────────
+async function doSearch() {
+  const set_code  = el('f-set').value;
+  const item_type = el('f-type').value;
+  const name      = el('f-name').value.trim();
+
+  if (!set_code && !item_type && !name) {
+    showEmpty('Select a set or type and press Search');
+    return;
+  }
+
+  el('results-empty').style.display   = 'none';
+  el('results-grid').style.display    = 'none';
+  el('results-loading').style.display = 'flex';
+  el('search-status').textContent     = 'Searching…';
+
+  const params = new URLSearchParams();
+  if (set_code)  params.set('set_code',  set_code);
+  if (item_type) params.set('item_type', item_type);
+  if (name)      params.set('name',      name);
+
+  try {
+    const res  = await fetch(`/api/sealed-catalog?${params}`);
+    const data = await res.json();
+    el('results-loading').style.display = 'none';
+    el('search-status').textContent = `${data.total} result${data.total !== 1 ? 's' : ''}`;
+    if (!data.data.length) { showEmpty('No products found — try different filters.'); return; }
+    renderGrid(data.data);
+  } catch {
+    el('results-loading').style.display = 'none';
+    showEmpty('Search failed — try again.');
+    el('search-status').textContent = '';
+  }
+}
+
+function showEmpty(msg) {
+  el('results-grid').style.display  = 'none';
+  el('results-empty').style.display = 'flex';
+  el('results-empty').querySelector('p').textContent = msg;
+}
+
+// ── Catalog: grid ────────────────────────────────────────────
+function renderGrid(items) {
+  const grid = el('results-grid');
+  grid.innerHTML = '';
+  items.forEach(item => {
+    const card = document.createElement('button');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <span class="product-type-badge">${item.item_type}</span>
+      <img src="${item.image_url || '/static/placeholder.png'}"
+           alt="${item.name}" onerror="this.src='/static/placeholder.png'">
+      <div class="product-card-overlay">
+        <div class="product-card-name">${item.name}</div>
+      </div>`;
+    card.addEventListener('click', () => selectItem(item, card));
+    grid.appendChild(card);
+  });
+  grid.style.display = 'grid';
+}
+
+// ── Catalog: select ──────────────────────────────────────────
+function selectItem(item, cardEl) {
+  document.querySelectorAll('.product-card.active').forEach(c => c.classList.remove('active'));
+  cardEl.classList.add('active');
+  selected = item;
+
+  el('sel-img').src  = item.image_url || '/static/placeholder.png';
+  el('sel-name').textContent = item.name;
+  el('sel-meta').textContent = [item.item_type, item.set_name].filter(Boolean).join(' · ');
+  el('sel-qty').value    = 1;
+  el('sel-pp').value     = '';
+  el('sel-mp').value     = '';
+  el('sel-opened').checked = false;
+  el('sel-notes').value  = '';
+
+  el('sidebar-empty').style.display    = 'none';
+  el('sidebar-selected').style.display = '';
+  el('sidebar-footer').style.display   = '';
+}
+
+// ── Catalog: save ────────────────────────────────────────────
+async function saveItem() {
+  if (!selected) return;
+  const btn = el('btn-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  const payload = {
+    name:           selected.name,
+    item_type:      selected.item_type,
+    set_name:       selected.set_name,
+    set_code:       selected.set_code,
+    image_url:      selected.image_url,
+    quantity:       parseInt(el('sel-qty').value) || 1,
+    purchase_price: parseFloat(el('sel-pp').value) || null,
+    market_price:   parseFloat(el('sel-mp').value) || null,
+    is_opened:      el('sel-opened').checked,
+    notes:          el('sel-notes').value.trim(),
+  };
+
+  try {
+    const res  = await fetch('/api/sealed/quick-add', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) { window.location.href = data.redirect; }
+    else { btn.disabled = false; btn.textContent = 'Add to Collection'; alert('Failed — try again.'); }
+  } catch {
+    btn.disabled = false; btn.textContent = 'Add to Collection'; alert('Network error — try again.');
+  }
+}
+
+// ── Custom item ──────────────────────────────────────────────
+function previewImg() {
+  const url = el('c-img').value.trim();
+  const prev = el('c-img-preview');
+  if (url) { prev.src = url; prev.style.display = 'block'; }
+  else      { prev.style.display = 'none'; }
+}
+
+el('btn-custom-save').addEventListener('click', saveCustom);
+
+async function saveCustom() {
+  const name = el('c-name').value.trim();
+  if (!name) { el('c-name').focus(); el('custom-status').textContent = 'Name is required.'; return; }
+
+  const btn = el('btn-custom-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  el('custom-status').textContent = '';
+
+  const setEl  = el('c-set');
+  const setCode = setEl.value;
+  const setName = setEl.selectedOptions[0]?.dataset.name || '';
+
+  const payload = {
+    name:           name,
+    item_type:      el('c-type').value.trim() || 'Custom',
+    set_name:       setName,
+    set_code:       setCode,
+    image_url:      el('c-img').value.trim(),
+    quantity:       parseInt(el('c-qty').value) || 1,
+    purchase_price: parseFloat(el('c-pp').value) || null,
+    market_price:   parseFloat(el('c-mp').value) || null,
+    is_opened:      el('c-opened').checked,
+    notes:          el('c-notes').value.trim(),
+  };
+
+  try {
+    const res  = await fetch('/api/sealed/quick-add', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) { window.location.href = data.redirect; }
+    else {
+      btn.disabled = false; btn.textContent = 'Add to Collection';
+      el('custom-status').textContent = 'Failed — try again.';
+    }
+  } catch {
+    btn.disabled = false; btn.textContent = 'Add to Collection';
+    el('custom-status').textContent = 'Network error — try again.';
+  }
+}
+</script>
+
+{% endblock %}

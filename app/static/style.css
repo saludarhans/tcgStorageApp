@@ -86,6 +86,33 @@ img { display: block; max-width: 100%; }
 .nav-link.btn-add:hover { background: #ffe040; }
 .nav-link.nav-admin { color: var(--danger); }
 
+/* Add-to-collection dropdown */
+.add-menu { position: relative; }
+.add-menu-trigger { border: none; cursor: pointer; }
+.add-menu-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  z-index: 300;
+  overflow: hidden;
+}
+.add-menu-dropdown.open { display: block; }
+.add-menu-item {
+  display: block;
+  padding: .65rem 1rem;
+  font-size: .9rem;
+  font-weight: 500;
+  color: var(--text);
+  transition: background .12s;
+}
+.add-menu-item:hover { background: var(--surface2); }
+
 /* user menu */
 .user-menu { position: relative; display: flex; align-items: center; gap: .4rem; cursor: pointer; }
 .user-avatar {
