@@ -1,98 +1,203 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="form-page">
-  <div class="form-header">
-    <h1>Edit Card</h1>
-    <a href="{{ url_for('view_card', card_id=card.id) }}" class="btn btn-outline">← Back</a>
-  </div>
+<div class="card-detail">
 
-  <!-- Read-only card summary -->
-  <div class="edit-card-summary">
-    <div class="edit-card-img">
+  <!-- ── Left: card image ─────────────────────────────────── -->
+  <div class="card-detail-img-col">
+    <div class="detail-img-wrap">
       <img src="{{ card.display_image }}" alt="{{ card.name }}"
            onerror="this.src='/static/placeholder.png'">
+      {% if card.is_foil %}<div class="foil-shine"></div>{% endif %}
     </div>
-    <div class="edit-card-meta">
-      <h2>{{ card.name }}</h2>
-      <div class="edit-meta-grid">
-        {% if card.set_name %}<div class="edit-meta-row"><span class="edit-meta-label">Set</span><span>{{ card.set_name }}</span></div>{% endif %}
-        {% if card.set_code %}<div class="edit-meta-row"><span class="edit-meta-label">Set Code</span><span>{{ card.set_code | upper }}</span></div>{% endif %}
-        {% if card.card_number %}<div class="edit-meta-row"><span class="edit-meta-label">Number</span><span>#{{ card.card_number }}</span></div>{% endif %}
-        {% if card.rarity %}<div class="edit-meta-row"><span class="edit-meta-label">Rarity</span><span>{{ card.rarity }}</span></div>{% endif %}
-        {% if card.card_type %}<div class="edit-meta-row"><span class="edit-meta-label">Type</span><span>{{ card.card_type }}</span></div>{% endif %}
-        {% if card.hp %}<div class="edit-meta-row"><span class="edit-meta-label">HP</span><span>{{ card.hp }}</span></div>{% endif %}
-        <div class="edit-meta-row"><span class="edit-meta-label">Quantity</span><span>{{ card.quantity }}</span></div>
-        {% if card.is_foil %}<div class="edit-meta-row"><span class="edit-meta-label">Foil</span><span>Yes</span></div>{% endif %}
-        {% if card.is_graded %}<div class="edit-meta-row"><span class="edit-meta-label">Grade</span><span>{{ card.grade }}</span></div>{% endif %}
-        {% if card.market_price %}<div class="edit-meta-row"><span class="edit-meta-label">Market Value</span><span>${{ "%.2f"|format(card.market_price) }}</span></div>{% endif %}
-      </div>
-    </div>
+    {% if card.is_graded %}
+    <div class="grade-badge-large">{{ card.grade or 'Graded' }}</div>
+    {% endif %}
   </div>
 
-  <!-- Editable fields only -->
-  <form method="POST" class="card-form">
-    {{ form.hidden_tag() }}
+  <!-- ── Right: info box + form ──────────────────────────── -->
+  <div class="card-detail-info-col">
 
-    <div class="form-section">
-      <h2>Purchase Price</h2>
-      <div class="form-group" style="max-width: 200px;">
-        {{ form.purchase_price(class="form-control", placeholder="0.00") }}
+    <div class="detail-header">
+      <h1>{{ card.name }}</h1>
+    </div>
+
+    <form method="POST">
+      {{ form.hidden_tag() }}
+
+      <!-- Read-only rows (mirrors view_card) -->
+      <div class="detail-grid">
+        {% macro row(label, value) %}
+          {% if value %}
+          <div class="detail-row">
+            <span class="detail-label">{{ label }}</span>
+            <span class="detail-value">{{ value }}</span>
+          </div>
+          {% endif %}
+        {% endmacro %}
+
+        {{ row('Set',         card.set_name) }}
+        {{ row('Card Number', card.card_number) }}
+        {{ row('Set Code',    card.set_code | upper) }}
+        {{ row('Rarity',      card.rarity) }}
+
+        <!-- Quantity steppers — one column per variant -->
+        <div class="detail-row detail-row-variants">
+          <span class="detail-label">Quantity</span>
+          <div class="detail-value" style="flex:1">
+            <table class="detail-variant-table">
+              <thead>
+                <tr>
+                  {% for s in siblings %}
+                  <th style="width:{{ (100 / siblings|length)|int }}%">{{ s.variant or 'Standard' }}</th>
+                  {% endfor %}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  {% for s in siblings %}
+                  <td>
+                    <div class="qty-stepper" id="stepper-{{ s.id }}">
+                      <button type="button" class="qty-btn"
+                              onclick="stepQty('qty_{{ s.id }}', -1)">−</button>
+                      <input  type="number" name="qty_{{ s.id }}" id="qty_{{ s.id }}"
+                              value="{{ s.quantity }}" min="0" class="qty-input"
+                              oninput="checkZero('qty_{{ s.id }}')">
+                      <button type="button" class="qty-btn"
+                              onclick="stepQty('qty_{{ s.id }}', 1)">+</button>
+                    </div>
+                    <div class="qty-zero-warn" id="warn-{{ s.id }}" style="display:none">
+                      Will be removed
+                    </div>
+                  </td>
+                  {% endfor %}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Purchase price (editable, same row style) -->
+        <div class="detail-row">
+          <span class="detail-label">Purchase Price</span>
+          {{ form.purchase_price(class="edit-input", placeholder="0.00", id="purchase_price") }}
+        </div>
+
+        <!-- Notes (editable) -->
+        <div class="detail-row edit-row-notes">
+          <span class="detail-label">Notes</span>
+          {{ form.notes(class="edit-input", rows=4, placeholder="Any notes about this card…") }}
+        </div>
       </div>
-    </div>
 
-    <div class="form-section">
-      <h2>Notes</h2>
-      <div class="form-group">
-        {{ form.notes(class="form-control", rows=4, placeholder="Any notes about this card…") }}
+      <div class="detail-actions">
+        {{ form.submit(class="btn btn-primary",
+           style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center") }}
+        <a href="{{ url_for('view_card', card_id=card.id) }}" class="btn btn-outline"
+           style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">Cancel</a>
       </div>
-    </div>
+    </form>
 
-    <div class="form-actions">
-      {{ form.submit(class="btn btn-primary btn-lg") }}
-      <a href="{{ url_for('view_card', card_id=card.id) }}" class="btn btn-outline btn-lg">Cancel</a>
-    </div>
-  </form>
+    <p class="detail-meta-footer" style="margin-top:1rem">
+      Added {{ card.added_at.strftime('%B %d, %Y') }}
+    </p>
+
+  </div>
 </div>
 
 <style>
-.edit-card-summary {
+/* ── Quantity stepper ── */
+.qty-stepper {
   display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-}
-.edit-card-img {
-  flex-shrink: 0;
-  width: 120px;
-}
-.edit-card-img img {
-  width: 100%;
-  border-radius: 8px;
-  display: block;
-}
-.edit-card-meta { flex: 1; min-width: 0; }
-.edit-card-meta h2 { margin: 0 0 1rem; font-size: 1.3rem; }
-.edit-meta-grid {
-  display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 6px;
+  padding: 4px 0;
 }
-.edit-meta-row {
+.qty-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
   display: flex;
-  gap: 1rem;
-  font-size: 0.88rem;
-}
-.edit-meta-label {
-  width: 100px;
+  align-items: center;
+  justify-content: center;
+  transition: background .12s, border-color .12s, color .12s;
   flex-shrink: 0;
-  color: var(--muted);
-  font-weight: 600;
 }
+.qty-btn:hover {
+  background: var(--accent2);
+  border-color: var(--accent2);
+  color: #fff;
+}
+.qty-input {
+  width: 32px;
+  text-align: center;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 0.9rem;
+  padding: 0;
+  -moz-appearance: textfield;
+}
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.qty-input:focus { outline: none; }
+
+/* Zero warning */
+.qty-zero-warn {
+  font-size: 0.62rem;
+  color: var(--danger);
+  text-align: center;
+  padding-bottom: 3px;
+}
+.stepper-zero .qty-btn,
+.stepper-zero .qty-input { color: var(--danger); }
+.stepper-zero .qty-btn   { border-color: var(--danger); }
+
+/* ── Editable fields in detail-row style ── */
+.edit-input {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 5px 10px;
+  font-size: .88rem;
+  width: 100%;
+}
+.edit-input:focus {
+  outline: none;
+  border-color: var(--accent2);
+  background: rgba(255,255,255,0.08);
+}
+.edit-row-notes { align-items: flex-start; padding-top: .6rem; padding-bottom: .6rem; }
+textarea.edit-input { resize: vertical; min-height: 80px; }
 </style>
+
+<script>
+function stepQty(id, delta) {
+  const input = document.getElementById(id);
+  const val   = Math.max(0, (parseInt(input.value) || 0) + delta);
+  input.value = val;
+  checkZero(id);
+}
+
+function checkZero(id) {
+  const input    = document.getElementById(id);
+  const cardId   = id.replace('qty_', '');
+  const stepper  = document.getElementById('stepper-' + cardId);
+  const warn     = document.getElementById('warn-'    + cardId);
+  const isZero   = parseInt(input.value) === 0;
+  stepper.classList.toggle('stepper-zero', isZero);
+  warn.style.display = isZero ? '' : 'none';
+}
+</script>
 
 {% endblock %}

@@ -122,11 +122,113 @@
 .del-sel-count { font-size: .9rem; font-weight: 600; }
 .del-sel-hint  { font-size: .78rem; opacity: .45; }
 .del-action-bar-right { display: flex; gap: .6rem; }
+
+/* ── Graded card slab ───────────────────────────────────── */
+.slab-card {
+  background: linear-gradient(150deg, #dde2ea 0%, #b8bfc9 100%);
+  padding: 5px 5px 4px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.45),
+    inset 0 0 0 3px rgba(0,0,0,0.12);
+}
+/* suppress the default img scale so only the inner image scales */
+.pokemon-card:hover .slab-card img { transform: none; }
+
+.slab {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.slab-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 7px;
+  flex-shrink: 0;
+  border-radius: 2px 2px 0 0;
+  /* default (unknown company) */
+  background: #444;
+}
+.slab-co {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  color: #fff;
+  text-transform: uppercase;
+}
+.slab-grade {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+.slab-inner {
+  flex: 1;
+  background: #fff;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.slab-inner img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform .2s;
+}
+.pokemon-card:hover .slab-inner img { transform: scale(1.04); }
+.slab-footer {
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 0 0 2px 2px;
+  background: #444;
+}
+
+/* Company colours */
+.slab-psa .slab-header,
+.slab-psa .slab-footer { background: #CC0000; }
+
+.slab-bgs .slab-header,
+.slab-bgs .slab-footer { background: #1B2A4A; }
+
+.slab-cgc .slab-header,
+.slab-cgc .slab-footer { background: #1B4D3E; }
+
+.slab-sgc .slab-header,
+.slab-sgc .slab-footer { background: #1C1C1C; }
+
+/* ── Version breakdown table ── */
+.variant-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 0.7rem;
+}
+.variant-table th {
+  padding: 3px 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.variant-table td {
+  padding: 3px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
 </style>
 
 <div class="page-header">
   <h1>My Collection
-    <span class="badge">{{ cards|length }} cards</span>
+    <span class="badge">{{ total_copies }} card{{ 's' if total_copies != 1 else '' }}</span>
   </h1>
   <div style="display:flex;gap:.6rem;align-items:center">
     <button id="del-multi-btn" class="btn btn-outline" onclick="toggleDelMode()">Delete Multiple</button>
@@ -165,23 +267,36 @@
   {% endif %}
 </div>
 
-{% if cards %}
+{% if card_groups %}
 <div class="card-grid">
-  {% for card in cards %}
+  {% for group in card_groups %}
+  {% set card = group.card %}
   <div class="pokemon-card" id="card-{{ card.id }}">
     <button class="card-delete-btn"
             onclick="deleteCard({{ card.id }}, '{{ card.name|e }}')"
             title="Remove from collection">✕</button>
     <div class="card-select-dot"></div>
     <div class="card-click-overlay" onclick="toggleCardSelection({{ card.id }})"></div>
-    <a href="{{ url_for('view_card', card_id=card.id) }}" class="card-img-link">
-      <img src="{{ card.display_image }}" alt="{{ card.name }}"
-           onerror="this.src='/static/placeholder.png'">
+    <a href="{{ url_for('view_card', card_id=card.id) }}"
+       class="card-img-link{% if card.is_graded %} slab-card{% endif %}">
       {% if card.is_graded %}
-      <span class="badge-graded">{{ card.grade or 'Graded' }}</span>
-      {% endif %}
-      {% if card.is_foil %}
-      <span class="badge-foil">Foil</span>
+        {% set gparts  = (card.grade or '').split(' ', 1) %}
+        {% set company = gparts[0] if gparts[0] else 'GRADED' %}
+        {% set gnum    = gparts[1] if gparts|length > 1 else '' %}
+        <div class="slab slab-{{ company|lower }}">
+          <div class="slab-header">
+            <span class="slab-co">{{ company }}</span>
+            <span class="slab-grade">{{ gnum }}</span>
+          </div>
+          <div class="slab-inner">
+            <img src="{{ card.display_image }}" alt="{{ card.name }}"
+                 onerror="this.src='/static/placeholder.png'">
+          </div>
+          <div class="slab-footer"></div>
+        </div>
+      {% else %}
+        <img src="{{ card.display_image }}" alt="{{ card.name }}"
+             onerror="this.src='/static/placeholder.png'">
       {% endif %}
     </a>
     <div class="card-body">
@@ -195,6 +310,24 @@
         <span>{{ card.set_name or '—' }}</span>
         {% if card.card_number %}<span>#{{ card.card_number }}</span>{% endif %}
       </div>
+      {% if not card.is_graded %}
+      <table class="variant-table">
+        <thead>
+          <tr>
+            {% for v in group.variants %}
+            <th title="{{ v.label }}" style="width:{{ (100 / group.variants|length)|int }}%">{{ v.label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            {% for v in group.variants %}
+            <td>{{ v.qty }}</td>
+            {% endfor %}
+          </tr>
+        </tbody>
+      </table>
+      {% endif %}
       <div class="card-footer-row">
         <span class="condition-badge cond-{{ card.condition }}">{{ card.condition }}</span>
         {% if card.market_price %}

@@ -55,16 +55,19 @@ class SealedCatalog(db.Model):
     # Comma-padded list of ALL set codes this product is associated with.
     # Format: ",sv1,sv2,"  — allows LIKE '%,sv1,%' filtering without false positives.
     set_codes = db.Column(db.Text)
-    image_url = db.Column(db.String(500))
+    image_url         = db.Column(db.String(500))
+    market_price      = db.Column(db.Float)
+    last_price_update = db.Column(db.DateTime)
 
     def to_dict(self):
         return {
-            'id':        self.id,
-            'name':      self.name,
-            'item_type': self.item_type,
-            'set_name':  self.set_name,
-            'set_code':  self.set_code,
-            'image_url': self.image_url or '',
+            'id':           self.id,
+            'name':         self.name,
+            'item_type':    self.item_type,
+            'set_name':     self.set_name,
+            'set_code':     self.set_code,
+            'image_url':    self.image_url or '',
+            'market_price': self.market_price,
         }
 
 
@@ -132,11 +135,12 @@ class SealedItem(db.Model):
     market_price   = db.Column(db.Float)
     is_opened      = db.Column(db.Boolean, default=False)
 
-    image_url  = db.Column(db.String(500))
-    notes      = db.Column(db.Text)
+    image_url         = db.Column(db.String(500))
+    notes             = db.Column(db.Text)
 
-    added_at   = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    added_at          = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at        = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_price_update = db.Column(db.DateTime)
 
     @property
     def profit_loss(self):

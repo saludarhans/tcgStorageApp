@@ -1,5 +1,6 @@
 import os
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, jsonify, abort
 from flask_login import login_user, logout_user, login_required, current_user
@@ -174,6 +175,38 @@ def collection():
 
     cards = query.all()
 
+    # ── Group same physical cards together (same name + set + number) ──────
+    groups_dict = {}
+    group_order = []
+    for card in cards:
+        # Graded cards are always their own standalone entry
+        if card.is_graded:
+            key = ('__graded__', card.id)
+        else:
+            key = (card.name, card.set_code or '', card.card_number or '')
+        if key not in groups_dict:
+            groups_dict[key] = {'card': card, 'variants': defaultdict(int)}
+            group_order.append(key)
+        else:
+            rep = groups_dict[key]['card']
+            # Prefer a card row that actually has an image
+            if (card.image_url or card.local_image) and not (rep.image_url or rep.local_image):
+                groups_dict[key]['card'] = card
+        variant_label = card.variant or 'Standard'
+        groups_dict[key]['variants'][variant_label] += (card.quantity or 1)
+
+    card_groups = []
+    for key in group_order:
+        g = groups_dict[key]
+        variants = [{'label': k, 'qty': v} for k, v in g['variants'].items()]
+        card_groups.append({
+            'card':     g['card'],
+            'variants': variants,
+            'total':    sum(v['qty'] for v in variants),
+        })
+
+    total_copies = sum(g['total'] for g in card_groups)
+
     rarities = db.session.query(Card.rarity).filter(
         Card.user_id == current_user.id, Card.rarity != None
     ).distinct().all()
@@ -181,7 +214,8 @@ def collection():
 
     return render_template('collection.html',
                            title='My Collection',
-                           cards=cards,
+                           card_groups=card_groups,
+                           total_copies=total_copies,
                            rarities=rarities,
                            current_sort=sort,
                            current_type=filter_type,
@@ -239,7 +273,24 @@ def view_card(card_id):
     card = Card.query.get_or_404(card_id)
     if card.user_id != current_user.id and not current_user.is_admin():
         abort(403)
-    return render_template('view_card.html', title=card.name, card=card)
+
+    # Fetch all versions of this card the user owns (same name + set + number)
+    siblings = Card.query.filter_by(
+        user_id=card.user_id,
+        name=card.name,
+        set_code=card.set_code or '',
+        card_number=card.card_number or '',
+    ).all()
+
+    # Build variant breakdown — {label: total_qty}
+    variant_map = defaultdict(int)
+    for s in siblings:
+        variant_map[s.variant or 'Standard'] += (s.quantity or 1)
+    variants = [{'label': k, 'qty': v} for k, v in variant_map.items()]
+    total_copies = sum(v['qty'] for v in variants)
+
+    return render_template('view_card.html', title=card.name, card=card,
+                           variants=variants, total_copies=total_copies)
 
 
 @app.route('/card/<int:card_id>/edit', methods=['GET', 'POST'])
@@ -248,15 +299,52 @@ def edit_card(card_id):
     card = Card.query.get_or_404(card_id)
     if card.user_id != current_user.id and not current_user.is_admin():
         abort(403)
+
+    # All versions of this card the user owns (same name + set + number)
+    siblings = Card.query.filter_by(
+        user_id=card.user_id,
+        name=card.name,
+        set_code=card.set_code or '',
+        card_number=card.card_number or '',
+    ).order_by(Card.id).all()
+
     form = EditCardForm(obj=card)
     if form.validate_on_submit():
         card.notes          = form.notes.data
         card.purchase_price = form.purchase_price.data
         card.updated_at     = datetime.utcnow()
+
+        # Update / delete each sibling based on submitted quantities
+        deleted_current = False
+        for sibling in siblings:
+            new_qty = request.form.get(f'qty_{sibling.id}', type=int)
+            if new_qty is None:
+                continue
+            if new_qty <= 0:
+                if sibling.id == card.id:
+                    deleted_current = True
+                db.session.delete(sibling)
+            else:
+                sibling.quantity    = new_qty
+                sibling.updated_at  = datetime.utcnow()
+
         db.session.commit()
         flash(f'"{card.name}" updated.', 'success')
+
+        if deleted_current:
+            survivor = Card.query.filter_by(
+                user_id=current_user.id,
+                name=card.name,
+                set_code=card.set_code or '',
+                card_number=card.card_number or '',
+            ).first()
+            return redirect(url_for('view_card', card_id=survivor.id) if survivor
+                            else url_for('collection'))
+
         return redirect(url_for('view_card', card_id=card.id))
-    return render_template('card_form.html', title='Edit Card', form=form, card=card, action='edit')
+
+    return render_template('card_form.html', title='Edit Card',
+                           form=form, card=card, siblings=siblings, action='edit')
 
 
 @app.route('/card/<int:card_id>/delete', methods=['POST'])
@@ -469,11 +557,79 @@ def quick_add_card():
 
 # ─── Sealed Items ─────────────────────────────────────────────────────────────
 
+@app.route('/api/sealed/refresh-prices', methods=['POST'])
+@login_required
+def refresh_sealed_prices():
+    """
+    For every sealed item owned by the current user, look up the matching
+    SealedCatalog entry by name and copy its cached market_price.
+    Returns JSON: { ok, updated, missing }
+    """
+    items   = current_user.sealed_items.all()
+    updated = 0
+    missing = 0
+
+    for item in items:
+        # Match by exact name to the catalog (case-insensitive for safety)
+        cat = SealedCatalog.query.filter(
+            db.func.lower(SealedCatalog.name) == item.name.lower()
+        ).first()
+
+        if cat and cat.market_price:
+            item.market_price      = cat.market_price
+            item.last_price_update = datetime.utcnow()
+            updated += 1
+        else:
+            missing += 1
+
+    db.session.commit()
+    return jsonify({'ok': True, 'updated': updated, 'missing': missing})
+
+
 ITEM_TYPES = [
     'Booster Pack', 'Blister Pack', 'Booster Box', 'Elite Trainer Box',
     'Super Premium Collection', 'Premium Collection', 'Collection Box',
     'Tin', 'Bundle', 'Gift Box', 'Other',
 ]
+
+@app.route('/sealed')
+@login_required
+def sealed_collection():
+    sort        = request.args.get('sort', 'recent')
+    filter_type = request.args.get('type', '')
+
+    query = current_user.sealed_items
+    if filter_type:
+        query = query.filter(SealedItem.item_type == filter_type)
+
+    if sort == 'name':
+        query = query.order_by(SealedItem.name)
+    elif sort == 'value':
+        query = query.order_by(SealedItem.market_price.desc().nullslast())
+    elif sort == 'type':
+        query = query.order_by(SealedItem.item_type, SealedItem.name)
+    else:
+        query = query.order_by(SealedItem.added_at.desc())
+
+    items = query.all()
+
+    item_types = [t[0] for t in db.session.query(SealedItem.item_type)
+                  .filter(SealedItem.user_id == current_user.id,
+                          SealedItem.item_type != None)
+                  .distinct().all()]
+
+    total_qty   = sum(s.quantity for s in items)
+    total_value = sum((s.market_price or 0) * s.quantity for s in items)
+
+    return render_template('sealed_collection.html',
+                           title='Sealed Items',
+                           items=items,
+                           item_types=item_types,
+                           current_sort=sort,
+                           current_type=filter_type,
+                           total_qty=total_qty,
+                           total_value=total_value)
+
 
 @app.route('/sealed/add')
 @login_required
@@ -556,6 +712,9 @@ def edit_sealed(item_id):
         item.market_price   = float(p) if (p := request.form.get('market_price', '').strip()) else None
         item.is_opened      = bool(request.form.get('is_opened'))
         item.notes          = request.form.get('notes', '').strip()
+        new_qty = request.form.get('quantity', type=int)
+        if new_qty is not None and new_qty >= 1:
+            item.quantity = new_qty
         item.updated_at     = datetime.utcnow()
         db.session.commit()
         flash(f'"{item.name}" updated.', 'success')

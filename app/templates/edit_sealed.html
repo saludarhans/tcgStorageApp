@@ -1,68 +1,179 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="form-page" style="max-width:680px;margin:0 auto">
-  <div class="form-header">
-    <h1>Edit Item</h1>
-    <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline">← Back</a>
-  </div>
-
-  <!-- Read-only summary -->
-  <div class="edit-card-summary">
-    <div class="edit-card-img">
+<div class="card-detail">
+  <!-- Left column: image -->
+  <div class="card-detail-img-col">
+    <div class="detail-img-wrap">
       <img src="{{ item.image_url or '/static/placeholder.png' }}"
            alt="{{ item.name }}" onerror="this.src='/static/placeholder.png'">
     </div>
-    <div class="edit-card-meta">
-      <h2>{{ item.name }}</h2>
-      <div class="edit-meta-grid">
-        {% if item.item_type %}<div class="edit-meta-row"><span class="edit-meta-label">Type</span><span>{{ item.item_type }}</span></div>{% endif %}
-        {% if item.set_name  %}<div class="edit-meta-row"><span class="edit-meta-label">Set</span><span>{{ item.set_name }}</span></div>{% endif %}
-        {% if item.set_code  %}<div class="edit-meta-row"><span class="edit-meta-label">Set Code</span><span>{{ item.set_code | upper }}</span></div>{% endif %}
-        <div class="edit-meta-row"><span class="edit-meta-label">Quantity</span><span>{{ item.quantity }}</span></div>
-      </div>
-    </div>
+    {% if item.is_opened %}
+    <div class="grade-badge-large" style="background:rgba(255,255,255,0.1)">Opened</div>
+    {% endif %}
   </div>
 
-  <form method="POST" class="card-form">
+  <!-- Right column: editable info -->
+  <div class="card-detail-info-col">
+    <div class="detail-header">
+      <h1>{{ item.name }}</h1>
+    </div>
 
-    <div class="form-section">
-      <h2>Prices &amp; Status</h2>
-      <div class="form-row-2">
-        <div class="form-group">
-          <label>Purchase Price ($)</label>
-          <input type="number" name="purchase_price" class="form-control"
+    <div class="detail-actions">
+      <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline"
+         style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">← Back</a>
+    </div>
+
+    <!-- Read-only info rows -->
+    <div class="detail-grid">
+      {% macro row(label, value) %}
+        {% if value %}
+        <div class="detail-row">
+          <span class="detail-label">{{ label }}</span>
+          <span class="detail-value">{{ value }}</span>
+        </div>
+        {% endif %}
+      {% endmacro %}
+
+      {{ row('Type',     item.item_type) }}
+      {{ row('Set',      item.set_name) }}
+      {{ row('Set Code', item.set_code | upper if item.set_code) }}
+    </div>
+
+    <!-- Editable form -->
+    <form method="POST">
+
+      <!-- Quantity -->
+      <div class="detail-row" style="margin-top:1rem">
+        <span class="detail-label">Quantity</span>
+        <div class="detail-value">
+          <div class="qty-stepper" id="stepper-qty">
+            <button type="button" class="qty-btn" onclick="stepQty('quantity', -1)">−</button>
+            <input type="number" name="quantity" id="quantity"
+                   value="{{ item.quantity }}" min="1" class="qty-input">
+            <button type="button" class="qty-btn" onclick="stepQty('quantity', 1)">+</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Opened toggle -->
+      <div class="detail-row">
+        <span class="detail-label">Status</span>
+        <div class="detail-value">
+          <label class="check-label" style="margin:0">
+            <input type="checkbox" name="is_opened" {% if item.is_opened %}checked{% endif %}>
+            Already opened
+          </label>
+        </div>
+      </div>
+
+      <!-- Prices -->
+      <div class="detail-row">
+        <span class="detail-label">Purchase $</span>
+        <div class="detail-value">
+          <input type="number" name="purchase_price" class="form-control inline-input"
                  step="0.01" min="0" placeholder="0.00"
                  value="{{ item.purchase_price or '' }}">
         </div>
-        <div class="form-group">
-          <label>Market Price ($)</label>
-          <input type="number" name="market_price" class="form-control"
+      </div>
+
+      <div class="detail-row">
+        <span class="detail-label">Market $</span>
+        <div class="detail-value">
+          <input type="number" name="market_price" class="form-control inline-input"
                  step="0.01" min="0" placeholder="0.00"
                  value="{{ item.market_price or '' }}">
         </div>
       </div>
-      <div class="form-group">
-        <label class="check-label">
-          <input type="checkbox" name="is_opened" {% if item.is_opened %}checked{% endif %}>
-          Already opened
-        </label>
+
+      <!-- Notes -->
+      <div class="detail-row" style="align-items:flex-start">
+        <span class="detail-label" style="padding-top:.25rem">Notes</span>
+        <div class="detail-value">
+          <textarea name="notes" class="form-control" rows="4"
+                    style="width:100%;resize:vertical"
+                    placeholder="Any notes…">{{ item.notes or '' }}</textarea>
+        </div>
       </div>
-    </div>
 
-    <div class="form-section">
-      <h2>Notes</h2>
-      <div class="form-group">
-        <textarea name="notes" class="form-control" rows="4"
-                  placeholder="Any notes…">{{ item.notes or '' }}</textarea>
+      <div class="detail-actions" style="margin-top:1.5rem">
+        <button type="submit" class="btn btn-primary"
+                style="min-width:130px;height:40px;display:inline-flex;align-items:center;justify-content:center">
+          Save Changes
+        </button>
+        <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline"
+           style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">
+          Cancel
+        </a>
       </div>
-    </div>
 
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary btn-lg">Save Changes</button>
-      <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline btn-lg">Cancel</a>
-    </div>
+    </form>
 
-  </form>
+    <p class="detail-meta-footer">Added {{ item.added_at.strftime('%B %d, %Y') }}</p>
+  </div>
 </div>
+
+<style>
+/* Inline number input inside detail rows */
+.inline-input {
+  width: 140px;
+  padding: .35rem .6rem;
+  font-size: .9rem;
+}
+
+/* Qty stepper (same as card edit form) */
+.qty-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  width: fit-content;
+}
+.qty-btn {
+  width: 32px; height: 32px;
+  background: var(--surface2);
+  border: none;
+  color: var(--text);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+  flex-shrink: 0;
+}
+.qty-btn:hover { background: var(--border); }
+.qty-input {
+  width: 54px;
+  text-align: center;
+  border: none;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: .9rem;
+  font-weight: 700;
+  padding: .25rem 0;
+  -moz-appearance: textfield;
+}
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.check-label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .9rem;
+  cursor: pointer;
+}
+</style>
+
+<script>
+function stepQty(id, delta) {
+  const inp = document.getElementById(id);
+  const cur = parseInt(inp.value) || 1;
+  inp.value = Math.max(1, cur + delta);
+}
+</script>
+
 {% endblock %}

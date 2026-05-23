@@ -232,33 +232,6 @@
 .picker-card-meta  { font-size: 0.68rem; color: #fff; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .picker-card-price { font-size: 0.82rem; font-weight: 700; color: #60a5fa; margin-top: 5px; }
 
-/* ── XL badge on grid cards ─────────────────────────────── */
-.picker-card-xl-btn {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 10;
-  pointer-events: auto;
-  background: rgba(0,0,0,0.65);
-  border: 1.5px solid rgba(255,255,255,0.18);
-  border-radius: 14px;
-  color: rgba(255,255,255,0.55);
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: .06em;
-  padding: 2px 7px;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity .15s, background .15s, border-color .15s, color .15s;
-  white-space: nowrap;
-}
-.picker-card:hover .picker-card-xl-btn { opacity: 1; }
-.picker-card-xl-btn:hover {
-  background: rgba(251,146,60,.85);
-  border-color: #fb923c;
-  color: #fff;
-}
-
 /* queued flash — box-shadow so it works with overflow:hidden */
 @keyframes q-flash {
   0%,100% { box-shadow: 0 0 0 2px transparent; }
@@ -266,11 +239,6 @@
 }
 .picker-card.q-flash { animation: q-flash 0.5s ease-out forwards; }
 
-@keyframes q-flash-xl {
-  0%,100% { box-shadow: 0 0 0 2px transparent; }
-  35%     { box-shadow: 0 0 0 2px #fb923c, 0 0 14px rgba(251,146,60,.45); }
-}
-.picker-card.q-flash-xl { animation: q-flash-xl 0.5s ease-out forwards; }
 </style>
 
 <div class="picker-page">
@@ -499,23 +467,12 @@ function renderGrid(cards) {
         <div class="picker-card-name">${card.name}</div>
         <div class="picker-card-meta">${meta}</div>
         ${price ? `<div class="picker-card-price">$${price}</div>` : ''}
-      </div>
-      <button class="picker-card-xl-btn" title="Add as XL / oversized card">XL</button>`;
+      </div>`;
 
-    // Normal click → add as regular card
-    btn.addEventListener('click', e => {
-      if (e.target.closest('.picker-card-xl-btn')) return; // handled below
+    btn.addEventListener('click', () => {
       addToQueue(card, false);
       btn.classList.add('q-flash');
       setTimeout(() => btn.classList.remove('q-flash'), 550);
-    });
-
-    // XL button click → add as XL card
-    btn.querySelector('.picker-card-xl-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      addToQueue(card, true);
-      btn.classList.add('q-flash-xl');
-      setTimeout(() => btn.classList.remove('q-flash-xl'), 550);
     });
 
     grid.appendChild(btn);

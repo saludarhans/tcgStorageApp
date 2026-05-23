@@ -18,10 +18,12 @@
     </div>
 
     <div class="detail-actions">
-      <a href="{{ url_for('edit_sealed', item_id=item.id) }}" class="btn btn-outline">Edit</a>
+      <a href="{{ url_for('edit_sealed', item_id=item.id) }}" class="btn btn-primary"
+         style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">Edit</a>
       <form action="{{ url_for('delete_sealed', item_id=item.id) }}" method="POST"
             onsubmit="return confirm('Remove {{ item.name }} from your collection?')">
-        <button type="submit" class="btn btn-danger">Delete</button>
+        <button type="submit" class="btn btn-danger"
+                style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">Delete</button>
       </form>
     </div>
 
@@ -77,6 +79,9 @@
 
     <p class="detail-meta-footer">
       Added {{ item.added_at.strftime('%B %d, %Y') }}
+      {% if item.last_price_update %}
+        · Prices updated {{ item.last_price_update.strftime('%B %d, %Y') }}
+      {% endif %}
     </p>
   </div>
 </div>

@@ -19,10 +19,12 @@
     </div>
 
     <div class="detail-actions">
-      <a href="{{ url_for('edit_card', card_id=card.id) }}" class="btn btn-outline">Edit</a>
+      <a href="{{ url_for('edit_card', card_id=card.id) }}" class="btn btn-primary"
+         style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">Edit</a>
       <form action="{{ url_for('delete_card', card_id=card.id) }}" method="POST"
             onsubmit="return confirm('Remove {{ card.name }} from your collection?')">
-        <button type="submit" class="btn btn-danger">Delete</button>
+        <button type="submit" class="btn btn-danger"
+                style="min-width:100px;height:40px;display:inline-flex;align-items:center;justify-content:center">Delete</button>
       </form>
     </div>
 
@@ -40,10 +42,29 @@
       {{ row('Card Number', card.card_number) }}
       {{ row('Set Code', card.set_code | upper) }}
       {{ row('Rarity', card.rarity) }}
-      {{ row('Type', card.card_type) }}
-      {{ row('HP', card.hp) }}
-      {{ row('Quantity', card.quantity) }}
-      {{ row('Card Type', card.variant) }}
+      {% if not card.is_graded %}
+      <div class="detail-row detail-row-variants">
+        <span class="detail-label">Quantity</span>
+        <div class="detail-value">
+          <table class="detail-variant-table">
+            <thead>
+              <tr>
+                {% for v in variants %}
+                <th title="{{ v.label }}" style="width:{{ (100 / variants|length)|int }}%">{{ v.label }}</th>
+                {% endfor %}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                {% for v in variants %}
+                <td>{{ v.qty }}</td>
+                {% endfor %}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
       {% if card.is_graded %}
       {{ row('Grade', card.grade) }}
       {% endif %}
@@ -142,6 +163,31 @@
 {% endif %}
 
 <style>
+/* ── Variant breakdown table ── */
+.detail-row-variants { align-items: flex-start; }
+.detail-variant-table {
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  width: 100%;
+}
+.detail-variant-table th {
+  padding: 4px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.detail-variant-table td {
+  padding: 4px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
 .price-change-card {
   margin-top: 2rem;
   background: var(--surface);
