@@ -1,0 +1,736 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- ── Page header ────────────────────────────────────────────── -->
+<div class="bi-page-header">
+  <div class="bi-header-left">
+    <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline btn-sm">← Back</a>
+    <div class="bi-title">
+      <div>
+        <h1>Open Item</h1>
+        <p class="bi-subtitle">{{ item.name }}</p>
+      </div>
+    </div>
+  </div>
+  <span class="bi-qty-badge">
+    {{ item.quantity }} remaining
+  </span>
+</div>
+
+<!-- ── Two-column layout ──────────────────────────────────────── -->
+<div class="bi-layout">
+
+  <!-- Left: contents queue -->
+  <aside class="bi-queue-panel">
+
+    <div class="bi-pack-card">
+      <img class="bi-pack-thumb"
+           src="{{ item.image_url or '/static/placeholder.png' }}"
+           alt="{{ item.name }}" onerror="this.src='/static/placeholder.png'">
+      <div>
+        <div class="bi-pack-name">{{ item.name }}</div>
+        <div class="bi-pack-type">{{ item.item_type }}</div>
+        <div class="bi-pack-set">{{ item.set_name or 'Unknown Set' }}</div>
+      </div>
+    </div>
+
+    <!-- Packs section -->
+    <div class="bi-section-header">
+      <span class="bi-section-label">Packs Inside</span>
+      <span class="bi-count-badge" id="packs-count">0</span>
+    </div>
+    <div class="bi-packs-list" id="packs-list">
+      <div class="bi-empty-msg">Search for packs on the right →</div>
+    </div>
+
+    <!-- Promo cards section -->
+    <div class="bi-section-header">
+      <span class="bi-section-label">Promo Cards</span>
+      <span class="bi-count-badge" id="promos-count">0</span>
+    </div>
+    <div class="bi-promos-list" id="promos-list">
+      <div class="bi-empty-msg">Switch to "Cards" tab to add promos →</div>
+    </div>
+
+    <div class="bi-queue-footer">
+      <button class="btn btn-primary bi-complete-btn" id="bi-complete-btn"
+              onclick="completeBuild()" disabled>
+        Complete Build
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- Right: search panel -->
+  <main class="bi-search-panel">
+
+    <!-- Tab toggle -->
+    <div class="bi-tabs">
+      <button class="bi-tab active" id="tab-packs" onclick="switchTab('packs')">
+        Packs
+      </button>
+      <button class="bi-tab" id="tab-cards" onclick="switchTab('cards')">
+        Promo Cards
+      </button>
+    </div>
+
+    <!-- Search bar -->
+    <div class="bi-search-bar">
+      <input type="text" id="bi-search-input" class="bi-search-input"
+             placeholder="Search…"
+             oninput="scheduleSearch(this.value)" autocomplete="off">
+      <p class="bi-search-hint" id="bi-search-hint">
+        Showing packs from <strong>{{ item.set_name or 'all sets' }}</strong>
+      </p>
+    </div>
+
+    <div id="bi-status" class="bi-search-placeholder">
+      <div class="bi-spinner"></div><p>Loading…</p>
+    </div>
+    <div id="bi-results-grid" class="picker-grid" style="display:none"></div>
+
+  </main>
+</div>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<script>
+const ITEM_SET_CODE = {{ item.set_code | tojson }};
+const ITEM_SET_NAME = {{ item.set_name | tojson }};
+const ITEM_ID       = {{ item.id }};
+
+let packsInside  = [];   // {uid, name, item_type, set_name, set_code, image_url, quantity}
+let promoCards   = [];   // {uid, name, card_number, set_name, set_code, rarity, variant, availableVariants, image_url}
+let activeTab    = 'packs';
+let searchTimer  = null;
+let nextUid      = 0;
+
+// ── Variant helpers (same logic as rip_pack.html) ───────────────────────────
+function detectVariant(rarity) {
+  const r = (rarity || '').toLowerCase();
+  if (r.includes('special illustration rare')) return 'Special Illustration Rare';
+  if (r.includes('illustration rare'))         return 'Illustration Rare';
+  if (r.includes('hyper rare'))                return 'Gold';
+  if (r.includes('rainbow rare') || r.includes('rare rainbow')) return 'Rainbow Rare';
+  if (r.includes('secret rare')  || r.includes('rare secret'))  return 'Secret Rare';
+  if (r.includes('rare ultra'))                return 'Full Art';
+  if (r.includes('amazing rare'))              return 'Amazing Rare';
+  if (r.includes('prism star'))                return 'Prism Star';
+  if (r.includes('rare break'))                return 'BREAK';
+  if (r.includes('vmax'))                      return 'VMax';
+  if (r.includes('vstar'))                     return 'VStar';
+  if (r.includes('rare holo gx') || r.includes('shiny gx')) return 'GX';
+  if (r.includes('holo ex'))                   return 'EX';
+  if (r.includes('rare holo v'))               return 'V';
+  if (r.includes('reverse holo'))              return 'Reverse Holo';
+  if (r.includes('holo'))                      return 'Holo';
+  return 'Standard';
+}
+function getAvailableVariants(rarity) {
+  const r = (rarity || '').toLowerCase().trim();
+  if (r === 'common' || r === 'uncommon' || r === 'rare') return ['Standard', 'Reverse Holo'];
+  return [detectVariant(rarity)];
+}
+
+// ── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-packs').classList.toggle('active', tab === 'packs');
+  document.getElementById('tab-cards').classList.toggle('active', tab === 'cards');
+
+  const input = document.getElementById('bi-search-input');
+  input.value = '';
+  input.placeholder = tab === 'packs' ? 'Search for packs…' : 'Search for promo cards…';
+
+  const hint = document.getElementById('bi-search-hint');
+  if (tab === 'packs') {
+    hint.innerHTML = ITEM_SET_NAME
+      ? `Showing packs from <strong>${ITEM_SET_NAME}</strong>`
+      : 'Type a name to search sealed items';
+  } else {
+    hint.innerHTML = ITEM_SET_CODE
+      ? `Showing cards from <strong>${ITEM_SET_NAME || ITEM_SET_CODE}</strong>`
+      : 'Type a card name to search';
+  }
+
+  fetchResults('');
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+function scheduleSearch(query) {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => fetchResults(query), 220);
+}
+
+async function fetchResults(query) {
+  const grid   = document.getElementById('bi-results-grid');
+  const status = document.getElementById('bi-status');
+  const hint   = document.getElementById('bi-search-hint');
+
+  grid.style.display   = 'none';
+  status.style.display = 'flex';
+  status.innerHTML     = '<div class="bi-spinner"></div><p>Searching…</p>';
+
+  try {
+    let cards = [];
+
+    if (activeTab === 'packs') {
+      // Search sealed catalog
+      const params = new URLSearchParams({ pageSize: 80 });
+      if (query)         params.set('name',     query);
+      if (ITEM_SET_CODE) params.set('set_code', ITEM_SET_CODE);
+
+      const res  = await fetch('/api/sealed-catalog?' + params);
+      const data = await res.json();
+      const items = data.data || [];
+
+      hint.innerHTML = query
+        ? `${items.length} result${items.length !== 1 ? 's' : ''}`
+        : `${items.length} packs from <strong>${ITEM_SET_NAME || 'catalog'}</strong>`;
+
+      renderPackResults(items);
+      return;
+
+    } else {
+      // Search card catalog for promos
+      const params = new URLSearchParams({ pageSize: 100 });
+      if (query)         params.set('name',     query);
+      if (ITEM_SET_CODE) params.set('set_code', ITEM_SET_CODE);
+      else if (!query)   { /* need at least one filter */ }
+
+      if (!query && !ITEM_SET_CODE) {
+        status.innerHTML = '<p>Type a card name to search</p>';
+        return;
+      }
+
+      const res  = await fetch('/api/local-search?' + params);
+      const data = await res.json();
+      cards      = data.data || [];
+
+      hint.innerHTML = query
+        ? `${cards.length} result${cards.length !== 1 ? 's' : ''}`
+        : `Showing cards from <strong>${ITEM_SET_NAME || ITEM_SET_CODE}</strong>`;
+
+      renderCardResults(cards);
+    }
+  } catch {
+    status.innerHTML = '<p>Search failed — try again</p>';
+  }
+}
+
+// ── Render pack results ──────────────────────────────────────────────────────
+function renderPackResults(items) {
+  const grid   = document.getElementById('bi-results-grid');
+  const status = document.getElementById('bi-status');
+
+  if (!items.length) {
+    status.style.display = 'flex';
+    status.innerHTML = '<p>No packs found — try a different search.</p>';
+    grid.style.display = 'none';
+    return;
+  }
+
+  status.style.display = 'none';
+  grid.innerHTML = '';
+
+  items.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'picker-card';
+    btn.innerHTML = `
+      <div class="picker-card-img">
+        <img src="${item.image_url || '/static/placeholder.png'}"
+             alt="${item.name}" onerror="this.src='/static/placeholder.png'">
+      </div>
+      <div class="picker-card-overlay">
+        <div class="picker-card-name">${item.name}</div>
+        <div class="picker-card-meta">${item.item_type || ''}${item.set_name ? ' · ' + item.set_name : ''}</div>
+      </div>`;
+    btn.addEventListener('click', () => {
+      addPack(item);
+      btn.classList.add('q-flash');
+      setTimeout(() => btn.classList.remove('q-flash'), 550);
+    });
+    grid.appendChild(btn);
+  });
+
+  grid.style.display = 'grid';
+}
+
+// ── Render card results ──────────────────────────────────────────────────────
+function renderCardResults(cards) {
+  const grid   = document.getElementById('bi-results-grid');
+  const status = document.getElementById('bi-status');
+
+  if (!cards.length) {
+    status.style.display = 'flex';
+    status.innerHTML = '<p>No cards found — try a different search.</p>';
+    grid.style.display = 'none';
+    return;
+  }
+
+  status.style.display = 'none';
+  grid.innerHTML = '';
+
+  cards.forEach(card => {
+    const meta = [card.set?.name, card.number ? '#' + card.number : '', card.rarity]
+                   .filter(Boolean).join(' · ');
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'picker-card';
+    btn.innerHTML = `
+      <div class="picker-card-img">
+        <img src="${card.images?.small || '/static/placeholder.png'}"
+             alt="${card.name}" onerror="this.src='/static/placeholder.png'">
+      </div>
+      <div class="picker-card-overlay">
+        <div class="picker-card-name">${card.name}</div>
+        <div class="picker-card-meta">${meta}</div>
+      </div>`;
+    btn.addEventListener('click', () => {
+      addPromo(card);
+      btn.classList.add('q-flash');
+      setTimeout(() => btn.classList.remove('q-flash'), 550);
+    });
+    grid.appendChild(btn);
+  });
+
+  grid.style.display = 'grid';
+}
+
+// ── Add pack ─────────────────────────────────────────────────────────────────
+function addPack(item) {
+  // If the same pack is already in the list, bump its quantity
+  const existing = packsInside.find(p => p.name === item.name && p.item_type === item.item_type && p.set_code === (item.set_code || ''));
+  if (existing) {
+    existing.quantity++;
+  } else {
+    packsInside.push({
+      uid:       'p' + (nextUid++),
+      name:      item.name,
+      item_type: item.item_type || 'Booster Pack',
+      set_name:  item.set_name || '',
+      set_code:  item.set_code || '',
+      image_url: item.image_url || '',
+      quantity:  1,
+    });
+  }
+  renderContents();
+}
+
+// ── Add promo card ───────────────────────────────────────────────────────────
+function addPromo(card) {
+  const available = getAvailableVariants(card.rarity || '');
+  promoCards.push({
+    uid:               'c' + (nextUid++),
+    name:              card.name,
+    card_number:       card.number || '',
+    set_name:          card.set?.name || ITEM_SET_NAME || '',
+    set_code:          card.set?.id   || ITEM_SET_CODE || '',
+    rarity:            card.rarity || '',
+    image_url:         card.images?.large || card.images?.small || '/static/placeholder.png',
+    variant:           available[0],
+    availableVariants: available,
+  });
+  renderContents();
+}
+
+// ── Render the left-panel contents ───────────────────────────────────────────
+function renderContents() {
+  renderPacksList();
+  renderPromosList();
+
+  const totalItems = packsInside.length + promoCards.length;
+  document.getElementById('bi-complete-btn').disabled = totalItems === 0;
+}
+
+function renderPacksList() {
+  const list  = document.getElementById('packs-list');
+  const count = document.getElementById('packs-count');
+  const total = packsInside.reduce((s, p) => s + p.quantity, 0);
+  count.textContent = total;
+
+  if (!packsInside.length) {
+    list.innerHTML = '<div class="bi-empty-msg">Search for packs on the right →</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  packsInside.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'bi-content-item';
+    row.innerHTML = `
+      <img class="bi-content-thumb" src="${p.image_url || '/static/placeholder.png'}"
+           onerror="this.src='/static/placeholder.png'" alt="${p.name}">
+      <div class="bi-content-info">
+        <div class="bi-content-name" title="${p.name}">${p.name}</div>
+        <div class="bi-content-meta">${p.item_type}${p.set_name ? ' · ' + p.set_name : ''}</div>
+      </div>
+      <div class="bi-qty-ctrl">
+        <button class="bi-qty-btn" onclick="changePack('${p.uid}', -1)">−</button>
+        <span class="bi-qty-val">${p.quantity}</span>
+        <button class="bi-qty-btn" onclick="changePack('${p.uid}', +1)">+</button>
+      </div>
+      <button class="bi-remove-btn" onclick="removePack('${p.uid}')" title="Remove">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function renderPromosList() {
+  const list  = document.getElementById('promos-list');
+  const count = document.getElementById('promos-count');
+  count.textContent = promoCards.length;
+
+  if (!promoCards.length) {
+    list.innerHTML = '<div class="bi-empty-msg">Switch to "Cards" tab to add promos →</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  promoCards.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'bi-content-item';
+    row.innerHTML = `
+      <img class="bi-content-thumb" src="${c.image_url}"
+           onerror="this.src='/static/placeholder.png'" alt="${c.name}">
+      <div class="bi-content-info">
+        <div class="bi-content-name" title="${c.name}">${c.name}</div>
+        <div class="bi-content-meta">
+          ${c.card_number ? `<span class="bi-num">#${c.card_number}</span>` : ''}
+          ${c.availableVariants.length > 1
+            ? `<select class="bi-variant-select" onchange="changePromoVariant('${c.uid}', this.value)">
+                ${c.availableVariants.map(v =>
+                  `<option value="${v}"${v === c.variant ? ' selected' : ''}>${v}</option>`
+                ).join('')}
+               </select>`
+            : `<span class="bi-variant-fixed">${c.variant}</span>`
+          }
+        </div>
+      </div>
+      <button class="bi-remove-btn" onclick="removePromo('${c.uid}')" title="Remove">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function changePack(uid, delta) {
+  const p = packsInside.find(p => p.uid === uid);
+  if (!p) return;
+  p.quantity = Math.max(1, p.quantity + delta);
+  renderContents();
+}
+function removePack(uid) {
+  packsInside = packsInside.filter(p => p.uid !== uid);
+  renderContents();
+}
+function changePromoVariant(uid, val) {
+  const c = promoCards.find(c => c.uid === uid);
+  if (c) c.variant = val;
+}
+function removePromo(uid) {
+  promoCards = promoCards.filter(c => c.uid !== uid);
+  renderContents();
+}
+
+// ── Complete Build ────────────────────────────────────────────────────────────
+async function completeBuild() {
+  if (!packsInside.length && !promoCards.length) return;
+
+  const packTotal = packsInside.reduce((s, p) => s + p.quantity, 0);
+  const lines = [];
+  if (packTotal)          lines.push(`${packTotal} pack${packTotal !== 1 ? 's' : ''} added to your Items`);
+  if (promoCards.length)  lines.push(`${promoCards.length} promo card${promoCards.length !== 1 ? 's' : ''} added to your collection`);
+
+  if (!confirm(`Confirm opening this item?\n\n${lines.join('\n')}`)) return;
+
+  const btn = document.getElementById('bi-complete-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  // Flatten packs: one entry per quantity unit so the server sees individual SealedItems
+  const flatPacks = [];
+  packsInside.forEach(p => {
+    for (let i = 0; i < p.quantity; i++) {
+      flatPacks.push({
+        name:      p.name,
+        item_type: p.item_type,
+        set_name:  p.set_name,
+        set_code:  p.set_code,
+        image_url: p.image_url,
+        quantity:  1,
+      });
+    }
+  });
+
+  try {
+    const res = await fetch(`/api/sealed/${ITEM_ID}/complete-build`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body:    JSON.stringify({ packs: flatPacks, promos: promoCards }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window.location.href = data.redirect;
+    } else {
+      alert(data.error || 'Something went wrong — please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Complete Build';
+    }
+  } catch {
+    alert('Network error — please try again.');
+    btn.disabled    = false;
+    btn.textContent = 'Complete Build';
+  }
+}
+
+// Load on page ready
+window.addEventListener('DOMContentLoaded', () => fetchResults(''));
+</script>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<style>
+/* ── Page header ──────────────────────────────── */
+.bi-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+.bi-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.bi-title h1      { margin: 0; font-size: 1.4rem; line-height: 1.1; }
+.bi-subtitle      { margin: 0; font-size: .82rem; color: var(--muted); }
+.bi-qty-badge {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .3rem .85rem;
+  font-size: .82rem;
+  color: var(--muted);
+}
+
+/* ── Two-column layout ────────────────────────── */
+.bi-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+/* ── Queue panel (left) ───────────────────────── */
+.bi-queue-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 120px);
+}
+
+.bi-pack-card {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.bi-pack-thumb { width: 48px; height: 67px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.bi-pack-name  { font-size: .85rem; font-weight: 600; line-height: 1.3; }
+.bi-pack-type  { font-size: .7rem;  color: #5eead4; font-weight: 600; margin-top: 1px; }
+.bi-pack-set   { font-size: .72rem; color: var(--muted); }
+
+.bi-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .45rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+  flex-shrink: 0;
+}
+.bi-section-label {
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+}
+.bi-count-badge {
+  background: rgba(20,184,166,.25);
+  color: #5eead4;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: .1rem .5rem;
+  border-radius: 999px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.bi-packs-list,
+.bi-promos-list {
+  overflow-y: auto;
+  max-height: 180px;
+  flex-shrink: 0;
+}
+.bi-promos-list { border-top: 1px solid var(--border); }
+
+.bi-empty-msg {
+  padding: .85rem 1rem;
+  font-size: .75rem;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Content items ────────────────────────────── */
+.bi-content-item {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .4rem .75rem;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+}
+.bi-content-item:last-child { border-bottom: none; }
+.bi-content-thumb {
+  width: 28px; height: 39px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.bi-content-info { flex: 1; min-width: 0; }
+.bi-content-name {
+  font-size: .75rem; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bi-content-meta {
+  display: flex; align-items: center; gap: .3rem;
+  font-size: .65rem; color: var(--muted); margin-top: 2px;
+}
+.bi-num { flex-shrink: 0; }
+
+/* Qty control */
+.bi-qty-ctrl {
+  display: flex; align-items: center; gap: .25rem; flex-shrink: 0;
+}
+.bi-qty-btn {
+  width: 20px; height: 20px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: .8rem; line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .12s;
+}
+.bi-qty-btn:hover { background: var(--border); }
+.bi-qty-val { font-size: .75rem; font-weight: 700; min-width: 18px; text-align: center; }
+
+.bi-variant-select {
+  font-size: .62rem;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 3px;
+  color: var(--text); padding: 1px 3px; cursor: pointer;
+  max-width: 90px;
+}
+.bi-variant-fixed { font-size: .62rem; color: var(--muted); }
+
+.bi-remove-btn {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: .68rem; width: 22px; height: 22px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  transition: color .12s, background .12s; flex-shrink: 0;
+}
+.bi-remove-btn:hover { color: #f87171; background: rgba(239,68,68,.1); }
+
+/* ── Footer ───────────────────────────────────── */
+.bi-queue-footer {
+  padding: .75rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  margin-top: auto;
+}
+.bi-complete-btn { width: 100%; background: #0d9488; border-color: #0d9488; }
+.bi-complete-btn:hover:not(:disabled) { background: #0f766e; }
+.bi-complete-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Search panel (right) ─────────────────────── */
+.bi-tabs {
+  display: flex;
+  gap: .35rem;
+  margin-bottom: .75rem;
+}
+.bi-tab {
+  padding: .4rem 1rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  font-size: .85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .13s, color .13s, border-color .13s;
+}
+.bi-tab:hover { color: var(--text); border-color: var(--muted); }
+.bi-tab.active {
+  background: rgba(20,184,166,.15);
+  border-color: rgba(20,184,166,.5);
+  color: #5eead4;
+  font-weight: 600;
+}
+
+.bi-search-input {
+  width: 100%;
+  padding: .65rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: .95rem;
+  outline: none;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.bi-search-input:focus { border-color: #0d9488; }
+.bi-search-hint {
+  font-size: .75rem; color: var(--muted);
+  margin: .35rem 0 1rem .25rem;
+}
+
+/* picker-grid from style.css */
+.bi-search-placeholder {
+  grid-column: 1 / -1;
+  padding: 3rem; text-align: center; color: var(--muted);
+  font-size: .88rem; display: flex; flex-direction: column;
+  align-items: center; gap: 1rem;
+}
+.bi-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid rgba(255,255,255,.1);
+  border-top-color: #0d9488;
+  border-radius: 50%;
+  animation: bispin .7s linear infinite;
+}
+@keyframes bispin { to { transform: rotate(360deg); } }
+
+/* Reuse picker-card styles from style.css (defined globally) */
+@keyframes q-flash {
+  0%,100% { box-shadow: 0 0 0 2px transparent; }
+  35%     { box-shadow: 0 0 0 2px #5eead4, 0 0 14px rgba(94,234,212,.35); }
+}
+.q-flash { animation: q-flash 0.5s ease-out forwards; }
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 800px) {
+  .bi-layout { grid-template-columns: 1fr; }
+  .bi-queue-panel { position: static; max-height: none; }
+  .bi-packs-list, .bi-promos-list { max-height: none; }
+}
+</style>
+
+{% endblock %}

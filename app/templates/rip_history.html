@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="page-header">
+  <h1>Rip History
+    <span class="badge">{{ sessions|length }} rip{{ 's' if sessions|length != 1 else '' }}</span>
+  </h1>
+  <a href="{{ url_for('sealed_collection') }}" class="btn btn-outline">View Items</a>
+</div>
+
+{% if sessions %}
+<div class="rh-list">
+  {% for s in sessions %}
+  <div class="rh-item">
+
+    <a href="{{ url_for('view_rip', rip_id=s.id) }}" class="rh-row">
+      <img class="rh-thumb"
+           src="{{ s.pack_image_url or '/static/placeholder.png' }}"
+           alt="{{ s.pack_name }}"
+           onerror="this.src='/static/placeholder.png'">
+
+      <div class="rh-info">
+        <div class="rh-pack-name">{{ s.pack_name }}</div>
+        <div class="rh-meta">
+          {% if s.pack_set_name %}<span>{{ s.pack_set_name }}</span>{% endif %}
+          <span class="rh-dot">·</span>
+          <span>{{ s.card_count }} card{{ 's' if s.card_count != 1 else '' }} pulled</span>
+          <span class="rh-dot">·</span>
+          <span>{{ s.ripped_at.strftime('%b %d, %Y') }}</span>
+        </div>
+      </div>
+
+      <!-- Mini card strip (up to 6 cards) -->
+      <div class="rh-strip">
+        {% for c in s.cards.limit(6).all() %}
+        <img class="rh-strip-card"
+             src="{{ c.image_url or '/static/placeholder.png' }}"
+             alt="{{ c.name }}"
+             onerror="this.src='/static/placeholder.png'"
+             title="{{ c.name }}">
+        {% endfor %}
+        {% if s.card_count > 6 %}
+        <span class="rh-strip-more">+{{ s.card_count - 6 }}</span>
+        {% endif %}
+      </div>
+
+      <span class="rh-arrow">→</span>
+    </a>
+
+    <form class="rh-delete-form"
+          action="{{ url_for('delete_rip', rip_id=s.id) }}"
+          method="POST"
+          onsubmit="return confirm('Delete this rip and remove {{ s.card_count }} card{{ 's' if s.card_count != 1 else '' }} from your collection?')">
+      <button type="submit" class="rh-delete-btn" title="Delete this rip">✕</button>
+    </form>
+
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<div class="empty-state">
+  <div class="empty-icon"></div>
+  <h2>No rips yet</h2>
+  <p>Rip your first booster pack to start building your history.</p>
+  <a href="{{ url_for('sealed_collection') }}" class="btn btn-primary">View Items</a>
+</div>
+{% endif %}
+
+<style>
+/* ── List ──────────────────────────────────────────────── */
+.rh-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+/* Wrapper so the delete button sits outside the <a> */
+.rh-item {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color .15s;
+}
+.rh-item:hover { border-color: rgba(99,102,241,.55); }
+
+.rh-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .8rem 1rem;
+  flex: 1;
+  min-width: 0;
+  text-decoration: none;
+  color: var(--text);
+  border-radius: var(--radius) 0 0 var(--radius);
+  transition: background .15s;
+}
+.rh-row:hover {
+  background: rgba(99,102,241,.06);
+  color: var(--text);
+}
+
+/* Pack thumbnail */
+.rh-thumb {
+  width: 44px;
+  height: 61px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* Text info */
+.rh-info {
+  flex: 0 0 220px;
+  min-width: 0;
+}
+.rh-pack-name {
+  font-size: .92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: .15rem;
+}
+.rh-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .2rem .45rem;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.rh-dot { opacity: .4; }
+
+/* Mini card strip */
+.rh-strip {
+  display: flex;
+  align-items: center;
+  gap: -6px;
+  flex: 1;
+  overflow: hidden;
+}
+.rh-strip-card {
+  width: 34px;
+  height: 47px;
+  object-fit: cover;
+  border-radius: 3px;
+  border: 1px solid var(--border);
+  margin-left: -6px;
+  transition: transform .15s;
+  flex-shrink: 0;
+}
+.rh-strip-card:first-child { margin-left: 0; }
+.rh-row:hover .rh-strip-card { transform: translateY(-3px); }
+.rh-strip-more {
+  font-size: .72rem;
+  color: var(--muted);
+  margin-left: .5rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Arrow */
+.rh-arrow {
+  color: var(--muted);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  transition: transform .15s, color .15s;
+}
+.rh-row:hover .rh-arrow {
+  transform: translateX(3px);
+  color: var(--text);
+}
+
+/* Delete button */
+.rh-delete-form {
+  display: flex;
+  align-items: center;
+  padding: 0 .65rem;
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.rh-delete-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .8rem;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color .12s, background .12s;
+}
+.rh-delete-btn:hover {
+  color: #f87171;
+  background: rgba(239,68,68,.12);
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .rh-strip { display: none; }
+  .rh-info  { flex: 1; }
+}
+</style>
+
+{% endblock %}

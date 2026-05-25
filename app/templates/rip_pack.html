@@ -1,0 +1,809 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- ── Page header ──────────────────────────────────────────── -->
+<div class="rip-page-header">
+  <div class="rip-header-left">
+    <a href="{{ url_for('view_sealed', item_id=item.id) }}" class="btn btn-outline btn-sm">← Back</a>
+    <div class="rip-title">
+      <span class="rip-emoji">🎴</span>
+      <div>
+        <h1>Ripping Pack</h1>
+        <p class="rip-subtitle">{{ item.name }}</p>
+      </div>
+    </div>
+  </div>
+  <span class="rip-qty-badge">
+    {{ item.quantity }} pack{{ 's' if item.quantity != 1 else '' }} remaining
+  </span>
+</div>
+
+<!-- ── Main layout ──────────────────────────────────────────── -->
+<div class="rip-layout">
+
+  <!-- Left: pulled-cards queue -->
+  <aside class="rip-queue-panel">
+
+    <div class="rip-pack-card">
+      <img class="rip-pack-thumb"
+           src="{{ item.image_url or '/static/placeholder.png' }}"
+           alt="{{ item.name }}" onerror="this.src='/static/placeholder.png'">
+      <div>
+        <div class="rip-pack-name">{{ item.name }}</div>
+        <div class="rip-pack-set">{{ item.set_name or 'Unknown Set' }}</div>
+      </div>
+    </div>
+
+    <div class="rip-queue-header">
+      <span class="rip-queue-label">Cards Pulled</span>
+      <span class="rip-count-badge" id="rip-count">0</span>
+    </div>
+
+    <div class="rip-pulled-list" id="pulled-list">
+      <div class="rip-empty-pull">
+        <p>Search for cards on the right<br>and click to add them here</p>
+      </div>
+    </div>
+
+    <div class="rip-queue-footer">
+      <button class="btn btn-primary rip-complete-btn" id="rip-complete-btn"
+              onclick="completeRip()" disabled>
+        Complete Rip
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- Right: card search -->
+  <main class="rip-search-panel">
+
+    <div class="rip-search-bar">
+      <input type="text" id="rip-search-input" class="rip-search-input"
+             placeholder="Search cards in {{ item.set_name or 'this set' }}…"
+             oninput="scheduleSearch(this.value)" autocomplete="off">
+      <p class="rip-search-hint" id="rip-search-hint">
+        {% if item.set_code %}
+          Showing all cards from <strong>{{ item.set_name or item.set_code }}</strong>
+        {% else %}
+          Type a card name to search your full catalog
+        {% endif %}
+      </p>
+    </div>
+
+    <!-- Basic Energy quick-pick (era-specific) -->
+    <div class="rip-energy-bar">
+      <div class="rip-energy-label-col">
+        <span class="rip-energy-label">Basic Energy</span>
+        <span class="rip-energy-era" id="energy-era-label"></span>
+      </div>
+      <div class="rip-energy-btns" id="energy-btns"></div>
+    </div>
+
+    <div id="rip-status" class="rip-search-placeholder">
+      <div class="rip-spinner"></div><p>Loading cards…</p>
+    </div>
+    <div id="rip-results-grid" class="picker-grid" style="display:none"></div>
+
+  </main>
+
+</div><!-- /.rip-layout -->
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<script>
+const PACK_SET_CODE = {{ item.set_code | tojson }};
+const PACK_SET_NAME = {{ item.set_name | tojson }};
+const PACK_ITEM_ID  = {{ item.id }};
+const PACK_ERA      = {{ pack_era | tojson }};
+
+const VARIANTS = [
+  'Standard', 'Reverse Holo', 'Holo',
+  'Full Art', 'Illustration Rare', 'Special Illustration Rare',
+  'Rainbow Rare', 'Gold',
+  'GX', 'EX', 'V', 'VMax', 'VStar', 'BREAK', 'Prism Star', 'Amazing Rare',
+];
+
+// Per-type display data (colour + emoji)
+const ENERGY_META = {
+  'Grass':     { color: '#22c55e', symbol: '🌿' },
+  'Fire':      { color: '#ef4444', symbol: '🔥' },
+  'Water':     { color: '#3b82f6', symbol: '💧' },
+  'Lightning': { color: '#eab308', symbol: '⚡' },
+  'Psychic':   { color: '#a855f7', symbol: '🔮' },
+  'Fighting':  { color: '#f97316', symbol: '👊' },
+  'Darkness':  { color: '#64748b', symbol: '🌑' },
+  'Metal':     { color: '#94a3b8', symbol: '⚙️' },
+  'Fairy':     { color: '#ec4899', symbol: '✨' },
+};
+
+// Which basic energy types existed in each era
+// • XY / SM: all 9 including Fairy
+// • SWSH / SV: Fairy was retired — only 8 types
+const ENERGY_BY_ERA = {
+  'xy':    ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Fairy'],
+  'sm':    ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal','Fairy'],
+  'swsh':  ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal'],
+  'sv':    ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal'],
+  'promo': ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal'],
+  'other': ['Grass','Fire','Water','Lightning','Psychic','Fighting','Darkness','Metal'],
+};
+
+let pulledCards = [];
+let searchTimer = null;
+let nextUid     = 0;   // simple counter — crypto.randomUUID() only works on https/localhost
+
+// ── Search ──────────────────────────────────────────────────────────────────
+function scheduleSearch(query) {
+  clearTimeout(searchTimer);
+  // Deactivate energy shortcut buttons when user types freely
+  document.querySelectorAll('.rip-energy-btn').forEach(b => b.classList.remove('rip-energy-active'));
+  const delay = query ? 220 : 0;
+  searchTimer = setTimeout(() => fetchCards(query), delay);
+}
+
+async function fetchCards(query) {
+  const grid   = document.getElementById('rip-results-grid');
+  const status = document.getElementById('rip-status');
+  const hint   = document.getElementById('rip-search-hint');
+
+  if (!PACK_SET_CODE && !query) {
+    grid.style.display   = 'none';
+    status.style.display = 'flex';
+    status.innerHTML     = '<p>Type a card name to search</p>';
+    return;
+  }
+
+  grid.style.display   = 'none';
+  status.style.display = 'flex';
+  status.innerHTML     = '<div class="rip-spinner"></div><p>Searching…</p>';
+
+  const params = new URLSearchParams({ pageSize: 100 });
+  if (query)         params.set('name',     query);
+  if (PACK_SET_CODE) params.set('set_code', PACK_SET_CODE);
+
+  try {
+    const res   = await fetch('/api/local-search?' + params);
+    const data  = await res.json();
+    const cards = data.data || [];
+
+    hint.innerHTML = query
+      ? (cards.length
+          ? `${cards.length} result${cards.length !== 1 ? 's' : ''} in <strong>${PACK_SET_NAME || PACK_SET_CODE || 'catalog'}</strong>`
+          : `No results for "<strong>${query}</strong>"`)
+      : `Showing <strong>${cards.length}</strong> cards from <strong>${PACK_SET_NAME || PACK_SET_CODE}</strong>`;
+
+    renderResults(cards);
+  } catch {
+    status.style.display = 'flex';
+    status.innerHTML     = '<p>Search failed — try again</p>';
+  }
+}
+
+// ── Render results grid — same pattern as add_card.html ─────────────────────
+function renderResults(cards) {
+  const grid   = document.getElementById('rip-results-grid');
+  const status = document.getElementById('rip-status');
+
+  if (!cards.length) {
+    grid.style.display   = 'none';
+    status.style.display = 'flex';
+    status.innerHTML     = '<p>No cards found — try a different search.</p>';
+    return;
+  }
+
+  status.style.display = 'none';
+  grid.innerHTML = '';
+
+  cards.forEach(card => {
+    const meta = [card.set?.name, card.number ? '#' + card.number : '', card.rarity]
+                   .filter(Boolean).join(' · ');
+    const btn = document.createElement('button');
+    btn.type      = 'button';
+    btn.className = 'picker-card';
+    btn.innerHTML = `
+      <div class="picker-card-img">
+        <img src="${card.images?.small || '/static/placeholder.png'}"
+             alt="${card.name}" onerror="this.src='/static/placeholder.png'">
+      </div>
+      <div class="picker-card-overlay">
+        <div class="picker-card-name">${card.name}</div>
+        <div class="picker-card-meta">${meta}</div>
+      </div>`;
+
+    btn.addEventListener('click', () => {
+      addCard(card);
+      btn.classList.add('q-flash');
+      setTimeout(() => btn.classList.remove('q-flash'), 550);
+    });
+
+    grid.appendChild(btn);
+  });
+
+  grid.style.display = 'grid';
+}
+
+// ── Detect variant from rarity ──────────────────────────────────────────────
+function detectVariant(rarity) {
+  const r = (rarity || '').toLowerCase();
+  if (r.includes('special illustration rare')) return 'Special Illustration Rare';
+  if (r.includes('illustration rare'))         return 'Illustration Rare';
+  if (r.includes('hyper rare'))                return 'Gold';
+  if (r.includes('rainbow rare') || r.includes('rare rainbow')) return 'Rainbow Rare';
+  if (r.includes('secret rare')  || r.includes('rare secret'))  return 'Secret Rare';
+  if (r.includes('rare ultra'))                return 'Full Art';
+  if (r.includes('amazing rare'))              return 'Amazing Rare';
+  if (r.includes('prism star'))                return 'Prism Star';
+  if (r.includes('rare break'))                return 'BREAK';
+  if (r.includes('vmax'))                      return 'VMax';
+  if (r.includes('vstar'))                     return 'VStar';
+  if (r.includes('rare holo gx') || r.includes('shiny gx')) return 'GX';
+  if (r.includes('holo ex'))                   return 'EX';
+  if (r.includes('rare holo v'))               return 'V';
+  if (r.includes('reverse holo'))              return 'Reverse Holo';
+  if (r.includes('holo'))                      return 'Holo';
+  return 'Standard';
+}
+
+// ── Available variants for a card (based on rarity) ─────────────────────────
+// Common / Uncommon / Rare can be Standard OR Reverse Holo → show both options.
+// Everything else has exactly one fixed variant (Full Art, GX, etc.).
+function getAvailableVariants(rarity) {
+  const r = (rarity || '').toLowerCase().trim();
+  if (r === 'common' || r === 'uncommon' || r === 'rare') {
+    return ['Standard', 'Reverse Holo'];
+  }
+  return [detectVariant(rarity)];
+}
+
+// ── Energy picker ───────────────────────────────────────────────────────────
+function initEnergyButtons() {
+  const container = document.getElementById('energy-btns');
+  const eraLabel  = document.getElementById('energy-era-label');
+  const types     = ENERGY_BY_ERA[PACK_ERA] || ENERGY_BY_ERA['other'];
+
+  // Show which era's energy set is being displayed
+  const ERA_NAMES = { xy:'XY', sm:'Sun & Moon', swsh:'Sword & Shield', sv:'Scarlet & Violet' };
+  if (eraLabel && ERA_NAMES[PACK_ERA]) {
+    eraLabel.textContent = ERA_NAMES[PACK_ERA];
+  }
+
+  types.forEach(type => {
+    const { color, symbol } = ENERGY_META[type];
+    const btn = document.createElement('button');
+    btn.className = 'rip-energy-btn';
+    btn.title     = `Search for ${type} Energy cards`;
+    btn.style.setProperty('--e-color', color);
+    btn.innerHTML = `${symbol} ${type}`;
+    btn.addEventListener('click', () => searchEnergy(type, btn));
+    container.appendChild(btn);
+  });
+}
+
+async function searchEnergy(type, btn) {
+  // Highlight the tapped button
+  document.querySelectorAll('.rip-energy-btn').forEach(b => b.classList.remove('rip-energy-active'));
+  btn.classList.add('rip-energy-active');
+
+  // Fill the search bar so the user sees what's being searched
+  const input = document.getElementById('rip-search-input');
+  input.value = `${type} Energy`;
+  input.focus();
+
+  const grid = document.getElementById('rip-results-grid');
+  const hint = document.getElementById('rip-search-hint');
+  grid.innerHTML = `<div class="rip-search-placeholder"><div class="rip-spinner"></div><p>Searching…</p></div>`;
+
+  // Search by era (not set_code) so energies show up regardless of which specific
+  // set the pack belongs to. Query both naming conventions in parallel:
+  //   "Fire Energy"       — XY and SM era card names
+  //   "Basic Fire Energy" — SWSH and SV era card names
+  const baseParams = new URLSearchParams({ pageSize: 20 });
+  if (PACK_ERA && PACK_ERA !== 'other' && PACK_ERA !== 'promo') {
+    baseParams.set('era', PACK_ERA);
+  }
+  const p1 = new URLSearchParams(baseParams); p1.set('name', `${type} Energy`);
+  const p2 = new URLSearchParams(baseParams); p2.set('name', `Basic ${type} Energy`);
+
+  try {
+    const [r1, r2] = await Promise.all([
+      fetch('/api/local-search?' + p1),
+      fetch('/api/local-search?' + p2),
+    ]);
+    const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+
+    // Merge and deduplicate by card id
+    const seen  = new Set();
+    const cards = [];
+    for (const c of [...(d1.data || []), ...(d2.data || [])]) {
+      if (!seen.has(c.id)) { seen.add(c.id); cards.push(c); }
+    }
+
+    if (cards.length) {
+      hint.innerHTML = `${cards.length} <strong>${type} Energy</strong> card${cards.length !== 1 ? 's' : ''} found`;
+    } else {
+      hint.innerHTML = `No ${type} Energy cards indexed yet — run <code>seed_energies.py</code>`;
+    }
+    renderResults(cards);
+  } catch {
+    const status = document.getElementById('rip-status');
+    status.style.display = 'flex';
+    status.innerHTML     = '<p>Search failed — try again</p>';
+  }
+}
+
+// ── Add card to pulled list ─────────────────────────────────────────────────
+function addCard(card) {
+  const img = card.images?.large || card.images?.small || '/static/placeholder.png';
+
+  const available = getAvailableVariants(card.rarity || '');
+  pulledCards.push({
+    uid:               'c' + (nextUid++),
+    name:              card.name,
+    card_number:       card.number || '',
+    set_name:          card.set?.name || PACK_SET_NAME || '',
+    set_code:          card.set?.id   || PACK_SET_CODE || '',
+    rarity:            card.rarity || '',
+    image_url:         img,
+    variant:           available[0],
+    availableVariants: available,
+  });
+
+  renderQueue();
+}
+
+// ── Render pulled queue ─────────────────────────────────────────────────────
+function renderQueue() {
+  const list  = document.getElementById('pulled-list');
+  const count = document.getElementById('rip-count');
+  const btn   = document.getElementById('rip-complete-btn');
+
+  count.textContent = pulledCards.length;
+  btn.disabled      = pulledCards.length === 0;
+
+  if (pulledCards.length === 0) {
+    list.innerHTML = `<div class="rip-empty-pull">
+      <p>Search for cards on the right<br>and click to add them here</p></div>`;
+    return;
+  }
+
+  list.innerHTML = '';
+  pulledCards.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'rip-pulled-item';
+    row.innerHTML = `
+      <img class="rip-pulled-thumb" src="${c.image_url}"
+           onerror="this.src='/static/placeholder.png'" alt="${c.name}">
+      <div class="rip-pulled-info">
+        <div class="rip-pulled-name" title="${c.name}">${c.name}</div>
+        <div class="rip-pulled-meta">
+          ${c.card_number ? `<span class="rip-num-badge">#${c.card_number}</span>` : ''}
+          ${c.availableVariants && c.availableVariants.length > 1
+            ? `<select class="rip-variant-select" onchange="changeVariant('${c.uid}', this.value)">
+                ${c.availableVariants.map(v =>
+                  `<option value="${v}"${v === c.variant ? ' selected' : ''}>${v}</option>`
+                ).join('')}
+               </select>`
+            : `<span class="rip-variant-fixed">${c.variant}</span>`
+          }
+        </div>
+      </div>
+      <button class="rip-remove-btn" onclick="removeCard('${c.uid}')" title="Remove">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function changeVariant(uid, val) {
+  const c = pulledCards.find(c => c.uid === uid);
+  if (c) c.variant = val;
+}
+
+function removeCard(uid) {
+  pulledCards = pulledCards.filter(c => c.uid !== uid);
+  renderQueue();
+}
+
+// ── Complete Rip ────────────────────────────────────────────────────────────
+async function completeRip() {
+  if (pulledCards.length === 0) return;
+
+  if (!confirm(`Add ${pulledCards.length} card${pulledCards.length !== 1 ? 's' : ''} to your collection and consume one pack?`)) return;
+
+  const btn = document.getElementById('rip-complete-btn');
+  btn.disabled    = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch(`/api/sealed/${PACK_ITEM_ID}/complete-rip`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body:    JSON.stringify({ cards: pulledCards }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      window.location.href = data.redirect;
+    } else {
+      alert(data.error || 'Something went wrong — please try again.');
+      btn.disabled    = false;
+      btn.textContent = 'Complete Rip';
+    }
+  } catch {
+    alert('Network error — please try again.');
+    btn.disabled    = false;
+    btn.textContent = 'Complete Rip';
+  }
+}
+
+// Load set cards on page load
+window.addEventListener('DOMContentLoaded', () => {
+  initEnergyButtons();
+  fetchCards('');
+});
+</script>
+
+<!-- ─────────────────────────────────────────────────────────── -->
+<style>
+/* ── Page header ──────────────────────────────── */
+.rip-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: .75rem;
+}
+.rip-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.rip-title {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+}
+.rip-emoji  { font-size: 2rem; line-height: 1; }
+.rip-title h1 { margin: 0; font-size: 1.4rem; line-height: 1.1; }
+.rip-subtitle { margin: 0; font-size: .82rem; color: var(--muted); }
+.rip-qty-badge {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .3rem .85rem;
+  font-size: .82rem;
+  color: var(--muted);
+}
+
+/* ── Two-column layout ────────────────────────── */
+.rip-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+/* ── Queue panel (left) ───────────────────────── */
+.rip-queue-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: sticky;
+  top: 80px;
+  max-height: calc(100vh - 120px);
+}
+
+.rip-pack-card {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.rip-pack-thumb {
+  width: 56px;
+  height: 78px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.rip-pack-name { font-size: .85rem; font-weight: 600; line-height: 1.3; }
+.rip-pack-set  { font-size: .75rem; color: var(--muted); margin-top: 2px; }
+
+.rip-queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .55rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.rip-queue-label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+.rip-count-badge {
+  background: var(--accent);
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .1rem .55rem;
+  border-radius: 999px;
+  min-width: 22px;
+  text-align: center;
+  transition: transform .15s;
+}
+
+.rip-pulled-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 120px;
+}
+
+.rip-empty-pull {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.6;
+}
+
+/* ── Pulled card rows ─────────────────────────── */
+.rip-pulled-item {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .45rem .75rem;
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .12s;
+}
+.rip-pulled-item:hover { background: rgba(255,255,255,.03); }
+.rip-pulled-item:last-child { border-bottom: none; }
+
+.rip-pulled-thumb {
+  width: 30px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.rip-pulled-info { flex: 1; min-width: 0; }
+.rip-pulled-name {
+  font-size: .78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rip-pulled-meta {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  margin-top: 2px;
+}
+.rip-num-badge {
+  font-size: .67rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.rip-variant-select {
+  font-size: .67rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  padding: 1px 3px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.rip-variant-fixed {
+  font-size: .67rem;
+  color: var(--muted);
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rip-remove-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .72rem;
+  padding: 3px 5px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  transition: color .12s, background .12s;
+}
+.rip-remove-btn:hover { color: #f87171; background: rgba(239,68,68,.1); }
+
+.rip-queue-footer {
+  padding: .75rem;
+  border-top: 1px solid var(--border);
+}
+.rip-complete-btn { width: 100%; }
+.rip-complete-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Energy bar ───────────────────────────────── */
+.rip-energy-bar {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .6rem .9rem;
+  margin-bottom: .9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex-wrap: wrap;
+}
+.rip-energy-label-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.rip-energy-label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.rip-energy-era {
+  font-size: .67rem;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rip-energy-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+  flex: 1;
+}
+.rip-energy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .28rem .65rem;
+  background: rgba(255,255,255,.05);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: .75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background .13s, border-color .13s, transform .1s;
+  white-space: nowrap;
+}
+.rip-energy-btn:hover {
+  background: color-mix(in srgb, var(--e-color) 20%, transparent);
+  border-color: var(--e-color);
+  transform: scale(1.05);
+}
+@keyframes energy-flash {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.15); }
+}
+.rip-energy-flash { animation: energy-flash .35s ease; }
+
+/* ── Active energy button state ───────────────── */
+.rip-energy-btn.rip-energy-active {
+  background: color-mix(in srgb, var(--e-color) 25%, transparent);
+  border-color: var(--e-color);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ── Search panel (right) ─────────────────────── */
+.rip-search-input {
+  width: 100%;
+  padding: .65rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: .95rem;
+  outline: none;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.rip-search-input:focus { border-color: var(--accent); }
+.rip-search-hint {
+  font-size: .75rem;
+  color: var(--muted);
+  margin: .35rem 0 1rem .25rem;
+}
+
+/* picker-grid layout comes from style.css */
+
+/* ── Card picker — copied from add_card.html ──── */
+.picker-card {
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  aspect-ratio: 2 / 3;
+  background: #0d1117;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+}
+.picker-card-img {
+  width: 100%;
+  height: 100%;
+}
+.picker-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.25s ease;
+}
+.picker-card:hover .picker-card-img img { transform: scale(1.05); }
+.picker-card-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px 9px 9px;
+  background: linear-gradient(
+    to top,
+    rgba(0,0,0,0.92) 0%,
+    rgba(0,0,0,0.55) 45%,
+    transparent      100%
+  );
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.picker-card:hover .picker-card-overlay { opacity: 1; }
+.picker-card-name { font-size: .8rem;  font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 2px; }
+.picker-card-meta { font-size: .68rem; color: #fff; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@keyframes q-flash {
+  0%,100% { box-shadow: 0 0 0 2px transparent; }
+  35%     { box-shadow: 0 0 0 2px #60a5fa, 0 0 14px rgba(96,165,250,.45); }
+}
+.q-flash { animation: q-flash 0.5s ease-out forwards; }
+
+/* ── Placeholder / spinner ────────────────────── */
+.rip-search-placeholder {
+  grid-column: 1 / -1;
+  padding: 3rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: .88rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+.rip-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid rgba(255,255,255,.1);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Responsive ───────────────────────────────── */
+@media (max-width: 800px) {
+  .rip-layout {
+    grid-template-columns: 1fr;
+  }
+  .rip-queue-panel {
+    position: static;
+    max-height: none;
+  }
+}
+</style>
+
+{% endblock %}

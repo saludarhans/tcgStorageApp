@@ -105,6 +105,10 @@ img { display: block; max-width: 100%; }
 }
 .nav-link.btn-add:hover { background: #ffe040; }
 .nav-link.nav-admin { color: var(--danger); }
+.nav-link.nav-rip         { color: #a5b4fc; }
+.nav-link.nav-rip:hover   { color: #c7d2fe; background: rgba(99,102,241,.15); }
+.nav-link.nav-rip-history { color: var(--muted); font-size: .82rem; }
+.nav-link.nav-rip-history:hover { color: #a5b4fc; background: rgba(99,102,241,.1); }
 
 /* Add-to-collection dropdown */
 .add-menu { position: relative; }

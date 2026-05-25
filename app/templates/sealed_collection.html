@@ -10,6 +10,7 @@
             title="Sync prices from the catalog (run fetch_sealed_prices.py first to populate catalog prices)">
       ↻ Refresh Prices
     </button>
+    <a href="{{ url_for('rip_history') }}" class="btn btn-outline">Rip History</a>
     <a href="{{ url_for('add_sealed') }}" class="btn btn-primary">+ Add Item</a>
   </div>
 </div>
@@ -18,6 +19,7 @@
 
 <!-- Filters bar -->
 <div class="filter-bar">
+
   <div class="filter-group">
     <span class="filter-label">Sort:</span>
     {% for value, label in [('recent','Recent'),('name','Name'),('value','Value'),('type','Type')] %}
@@ -50,7 +52,7 @@
   {% for item in items %}
   <div class="pokemon-card sealed-item-card" id="sealed-{{ item.id }}">
 
-    <!-- Single-delete X -->
+    <!-- Delete button — always visible -->
     <button class="card-delete-btn"
             onclick="deleteSealedItem({{ item.id }}, '{{ item.name|e }}')"
             title="Remove from collection">✕</button>
@@ -70,6 +72,7 @@
       <div class="card-meta">
         <span>{{ item.item_type or '—' }}</span>
         {% if item.set_name %}<span>{{ item.set_name }}</span>{% endif %}
+        {% if item.language == 'JA' %}<span style="color:#fca5a5;font-weight:700">JA</span>{% endif %}
       </div>
       <div class="card-footer-row">
         <span class="condition-badge" style="background:rgba(255,255,255,0.08);color:var(--muted)">
@@ -81,6 +84,13 @@
         <span class="card-price no-price">No price</span>
         {% endif %}
       </div>
+      {% if item.quantity > 0 %}
+        {% if item.item_type == 'Booster Pack' %}
+        <a href="{{ url_for('rip_pack', item_id=item.id) }}" class="rip-card-btn">Rip Pack</a>
+        {% else %}
+        <a href="{{ url_for('build_item', item_id=item.id) }}" class="rip-card-btn rip-card-btn-build">Open</a>
+        {% endif %}
+      {% endif %}
     </div>
 
   </div>
@@ -89,8 +99,8 @@
 {% else %}
 <div class="empty-state">
   <div class="empty-icon"></div>
-  <h2>No sealed items{% if current_type %} of type "{{ current_type }}"{% endif %}</h2>
-  <p>{% if current_type %}Try clearing your filter.{% else %}Start tracking your sealed collection!{% endif %}</p>
+  <h2>No items{% if current_type %} of type "{{ current_type }}"{% endif %}</h2>
+  <p>{% if current_type %}Try clearing your filters.{% else %}Start tracking your sealed collection!{% endif %}</p>
   {% if not current_type %}
   <a href="{{ url_for('add_sealed') }}" class="btn btn-primary">Add Your First Item</a>
   {% endif %}
@@ -141,7 +151,33 @@
   backdrop-filter: blur(4px);
 }
 
-/* Reuse the existing card delete button */
+/* ── Rip button on pack cards ────────────────── */
+.rip-card-btn {
+  display: block;
+  width: calc(100% + 2px);
+  margin: .4rem -1px -1px;
+  padding: .45rem 0;
+  background: rgba(99,102,241,0);
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  letter-spacing: .02em;
+}
+.rip-card-btn:hover {
+  background: rgba(99,102,241,.18);
+  color: #a5b4fc;
+}
+.rip-card-btn-build       { color: #5eead4; }
+.rip-card-btn-build:hover { background: rgba(20,184,166,.18); color: #99f6e4; }
+
+/* Delete button — always visible */
 .pokemon-card {
   position: relative;
 }
@@ -152,19 +188,18 @@
   width: 24px; height: 24px;
   border-radius: 50%;
   border: none;
-  background: rgba(0,0,0,0.70);
-  color: #fff;
-  font-size: 0.95rem;
+  background: rgba(0,0,0,0.55);
+  color: rgba(255,255,255,0.7);
+  font-size: 0.85rem;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  opacity: 0; transform: scale(0.75);
-  transition: opacity .15s, transform .15s, background .15s;
-  pointer-events: none;
+  transition: background .15s, color .15s, transform .12s;
 }
-.pokemon-card:hover .card-delete-btn {
-  opacity: 1; transform: scale(1); pointer-events: auto;
+.card-delete-btn:hover {
+  background: #ef4444;
+  color: #fff;
+  transform: scale(1.1);
 }
-.card-delete-btn:hover { background: #ef4444; }
 
 @keyframes card-vanish {
   to { opacity: 0; transform: scale(0.88); }

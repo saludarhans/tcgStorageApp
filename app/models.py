@@ -21,6 +21,7 @@ class User(UserMixin, db.Model):
 
     cards        = db.relationship('Card',       backref='owner',  lazy='dynamic', cascade='all, delete-orphan')
     sealed_items = db.relationship('SealedItem', backref='owner',  lazy='dynamic', cascade='all, delete-orphan')
+    rip_sessions = db.relationship('RipSession', backref='user',   lazy='dynamic', cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -137,6 +138,7 @@ class SealedItem(db.Model):
 
     image_url         = db.Column(db.String(500))
     notes             = db.Column(db.Text)
+    language          = db.Column(db.String(5), default='EN')   # 'EN' or 'JA'
 
     added_at          = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at        = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -150,6 +152,44 @@ class SealedItem(db.Model):
 
     def __repr__(self):
         return f'<SealedItem {self.item_type} {self.name}>'
+
+
+class RipSession(db.Model):
+    """Records one pack-ripping event — which pack was opened, when, and what was pulled."""
+    __tablename__ = 'rip_sessions'
+
+    id             = db.Column(db.Integer, primary_key=True)
+    user_id        = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    pack_name      = db.Column(db.String(200), nullable=False)
+    pack_set_name  = db.Column(db.String(100))
+    pack_set_code  = db.Column(db.String(20))
+    pack_image_url = db.Column(db.String(500))
+    card_count     = db.Column(db.Integer, default=0)
+    ripped_at      = db.Column(db.DateTime, default=datetime.utcnow)
+
+    cards = db.relationship('RipSessionCard', backref='session', lazy='dynamic',
+                            cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<RipSession {self.id} {self.pack_name}>'
+
+
+class RipSessionCard(db.Model):
+    """One card pulled during a single pack rip."""
+    __tablename__ = 'rip_session_cards'
+
+    id          = db.Column(db.Integer, primary_key=True)
+    session_id  = db.Column(db.Integer, db.ForeignKey('rip_sessions.id'), nullable=False)
+    name        = db.Column(db.String(120), nullable=False)
+    card_number = db.Column(db.String(20))
+    set_name    = db.Column(db.String(100))
+    set_code    = db.Column(db.String(20))
+    rarity      = db.Column(db.String(60))
+    variant     = db.Column(db.String(60))
+    image_url   = db.Column(db.String(500))
+
+    def __repr__(self):
+        return f'<RipSessionCard {self.name}>'
 
 
 class SetReference(db.Model):
@@ -197,8 +237,12 @@ class Card(db.Model):
     local_image  = db.Column(db.String(200))
 
     notes      = db.Column(db.Text)
+    language   = db.Column(db.String(5), default='EN')   # 'EN' or 'JA'
     added_at   = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Set when the card was added via the rip feature — NULL for manually-added cards
+    rip_session_id = db.Column(db.Integer, db.ForeignKey('rip_sessions.id'), nullable=True, index=True)
 
     def __repr__(self):
         return f'<Card {self.name} {self.card_number}>'

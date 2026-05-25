@@ -139,6 +139,41 @@
   border-color: #fb923c;
   color: #fb923c;
 }
+
+/* ── Language toggle ─────────────────────────────────────── */
+.lang-toggle {
+  display: inline-flex;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.lang-btn {
+  padding: 3px 10px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.lang-btn.active {
+  background: rgba(239,68,68,.25);
+  color: #fca5a5;
+}
+.lang-badge {
+  display: inline-block;
+  font-size: 0.63rem;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(239,68,68,.22);
+  color: #fca5a5;
+  letter-spacing: .04em;
+  margin-left: 4px;
+  vertical-align: middle;
+}
 .q-variant-fixed {
   display: inline-block;
   padding: 4px 6px;
@@ -239,21 +274,22 @@
 }
 .picker-card.q-flash { animation: q-flash 0.5s ease-out forwards; }
 
+
 </style>
 
 <div class="picker-page">
 
 <div class="picker-main">
 
-  <!-- ── Search panel ──────────────────────────────────────── -->
-  <div class="picker-search-panel">
+  <!-- ── English search panel ────────────────────────────────── -->
+  <div class="picker-search-panel" id="en-search-panel">
     <div class="picker-fields">
       <div class="picker-field">
         <label>Pokémon Name</label>
         <input id="f-name" type="text" class="form-control"
                placeholder="e.g. Charizard" autocomplete="off">
       </div>
-      <div class="picker-field">
+      <div class="picker-field" id="era-filter-row">
         <label>Era / Series</label>
         <select id="f-era" class="form-control">
           <option value="">All eras</option>
@@ -285,6 +321,7 @@
       <button id="btn-clear"  class="btn btn-outline">Clear</button>
       <span id="search-status" class="search-status"></span>
     </div>
+
   </div>
 
   <!-- ── Results grid ──────────────────────────────────────── -->
@@ -306,6 +343,7 @@
     </div>
   </div><!-- /results-area -->
 
+
 </div><!-- /picker-main -->
 
   <!-- ── Queue sidebar ─────────────────────────────────────── -->
@@ -314,6 +352,10 @@
       <div class="queue-title">
         Queue
         <span id="q-badge" class="badge">0</span>
+      </div>
+      <div class="lang-toggle" title="Language for cards in this queue">
+        <button class="lang-btn active" id="lang-en" onclick="setLang('EN')">EN</button>
+        <button class="lang-btn"        id="lang-ja" onclick="setLang('JA')">JA</button>
       </div>
     </div>
     <div id="q-empty-state" class="q-empty-state">
@@ -330,20 +372,71 @@
 </div><!-- /picker-page -->
 
 <script>
+// ── Dataset injected from server ──────────────────────────
+const ALL_SETS_EN = {{ all_sets | tojson }};   // [[code, label], …]
+const SET_ERAS    = {{ set_eras | tojson }};   // {code: era}
+const ALL_SETS_JA = {{ all_sets_ja | tojson }}; // [[code, label], …]
+
 let currentPage   = 1;
 let totalPages    = 1;
-let queueItems    = [];   // { uid, card, qty, gradeCompany, grade, variant, isXl }
+let queueItems    = [];   // { uid, card, qty, gradeCompany, grade, variant, isXl, language, jaSetCode, jaSetName }
 let nextUid       = 0;
+let language      = 'EN';  // global language toggle
 
 const el = id => document.getElementById(id);
 
-// ── Era → filter set dropdown ─────────────────────────────
-el('f-era').addEventListener('change', () => {
+// ── Language toggle ───────────────────────────────────────
+function setLang(lang) {
+  language = lang;
+  el('lang-en').classList.toggle('active', lang === 'EN');
+  el('lang-ja').classList.toggle('active', lang === 'JA');
+
+  const setSelect = el('f-set');
+  const eraRow    = el('era-filter-row');
+
+  if (lang === 'JA') {
+    // Replace set options with the real Japanese sets
+    setSelect.innerHTML =
+      '<option value="">All Japanese sets</option>' +
+      ALL_SETS_JA.map(([code, name]) =>
+        `<option value="${code}">${name}</option>`
+      ).join('');
+    // Hide the EN era filter — JA sets have their own era structure
+    if (eraRow) eraRow.style.display = 'none';
+  } else {
+    // Restore English sets (with era data attributes)
+    setSelect.innerHTML =
+      '<option value="">All sets</option>' +
+      ALL_SETS_EN.map(([code, name]) =>
+        `<option value="${code}" data-era="${SET_ERAS[code] || ''}">${name}</option>`
+      ).join('');
+    if (eraRow) eraRow.style.display = '';
+  }
+
+  // Reset search state for the new language
+  setSelect.value = '';
+  el('results-grid').style.display       = 'none';
+  el('results-pagination').style.display = 'none';
+  el('results-error').style.display      = 'none';
+  el('results-empty').style.display      = 'flex';
+  el('results-empty').querySelector('p').textContent = lang === 'JA'
+    ? 'Select a Japanese set or search by name — run index_japanese_cards.py first if no results appear'
+    : 'Search for a card above to see results';
+  el('search-status').textContent = '';
+  syncQueue();
+}
+
+function wireEraFilter() {
   const era = el('f-era').value;
   el('f-set').querySelectorAll('option').forEach(opt => {
     if (!opt.value) { opt.style.display = ''; return; }
     opt.style.display = (!era || opt.dataset.era === era) ? '' : 'none';
   });
+}
+
+// ── Era → filter set dropdown (EN mode only) ─────────────
+el('f-era').addEventListener('change', () => {
+  wireEraFilter();
   el('f-set').value = '';
 });
 
@@ -372,11 +465,13 @@ function buildParams(page) {
   const name    = el('f-name').value.trim();
   const setCode = el('f-set').value.trim();
   const number  = el('f-number').value.trim();
-  const era     = el('f-era').value;
+  const era     = (language === 'EN') ? el('f-era').value : '';
   if (name)            p.name     = name;
   if (setCode)         p.set_code = setCode;
   if (number)          p.number   = number;
   if (!setCode && era) p.era      = era;
+  // In JA mode with no set selected, scope results to JA catalog only
+  if (language === 'JA' && !setCode) p.lang = 'JA';
   return p;
 }
 
@@ -419,8 +514,9 @@ async function doSearch(page) {
 
     if (!cards.length) {
       el('results-empty').style.display = 'flex';
-      el('results-empty').querySelector('p').textContent =
-        'No cards found — try different search terms.';
+      el('results-empty').querySelector('p').textContent = language === 'JA'
+        ? 'No Japanese cards found — run: python3 index_japanese_cards.py'
+        : 'No cards found — try different search terms.';
       return;
     }
 
@@ -527,16 +623,17 @@ function getAvailableVariants(name, rarity) {
 // ── Queue ─────────────────────────────────────────────────
 
 function addToQueue(card, isXl = false) {
-  const available   = getAvailableVariants(card.name, card.rarity);
-  const autoVariant = available[0];
+  const available = getAvailableVariants(card.name, card.rarity);
   queueItems.push({
     uid: nextUid++, card, qty: 1,
     gradeCompany: '', grade: '',
-    variant: autoVariant, availableVariants: available,
+    variant: available[0], availableVariants: available,
     isXl: !!isXl,
+    language: language,   // use global language toggle ('EN' or 'JA')
   });
   syncQueue();
 }
+
 
 function removeFromQueue(uid) {
   queueItems = queueItems.filter(i => i.uid !== uid);
@@ -567,9 +664,12 @@ function syncQueue() {
              src="${item.card.images?.small || '/static/placeholder.png'}"
              alt="${item.card.name}" onerror="this.src='/static/placeholder.png'">
         <div class="q-info">
-          <div class="q-name">${item.card.name}</div>
+          <div class="q-name">
+            ${item.card.name}
+            ${item.language === 'JA' ? '<span class="lang-badge">JA</span>' : ''}
+          </div>
           <div class="q-meta">
-            ${item.card.set?.name || ''}${item.card.number ? ' · #' + item.card.number : ''}
+            ${item.card.set?.name || (item.language === 'JA' ? 'Japanese' : '')}${item.card.number ? ' · #' + item.card.number : ''}
           </div>
         </div>
         <button class="q-remove" data-uid="${item.uid}" title="Remove">×</button>
@@ -683,14 +783,14 @@ async function saveAll() {
 
   for (const item of queueItems) {
     btn.textContent = `Saving ${saved + failed.length + 1} / ${total}…`;
-    const { card, qty, gradeCompany, grade, variant, isXl, isFoil } = item;
+    const { card, qty, gradeCompany, grade, variant, isXl, isFoil, language: lang } = item;
     const gradeStr = gradeCompany && grade ? `${gradeCompany} ${grade}` : (gradeCompany || null);
     const autoFoil = (card.rarity || '').toLowerCase().includes('holo');
     const payload  = {
       name:         card.name,
       card_number:  card.number,
-      set_name:     card.set?.name,
-      set_code:     card.set?.id,
+      set_name:     card.set?.name  || '',
+      set_code:     card.set?.id    || '',
       rarity:       card.rarity,
       card_type:    card.supertype,
       pokemon_type: (card.types || [])[0] || '',
@@ -703,6 +803,7 @@ async function saveAll() {
       is_foil:      isFoil !== undefined ? !!isFoil : autoFoil,
       variant:      variant || null,
       is_xl:        !!isXl,
+      language:     lang || 'EN',
     };
     try {
       const res  = await fetch('/api/cards/quick-add', {

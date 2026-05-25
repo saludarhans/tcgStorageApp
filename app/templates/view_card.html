@@ -162,6 +162,35 @@
 </div>
 {% endif %}
 
+<!-- ── Pulled-from section ──────────────────────────────────── -->
+{% if rip_sources %}
+<div class="pf-section">
+  <div class="pf-heading">
+    <h2 class="pf-title">Pulled From</h2>
+    <span class="pf-count">{{ rip_sources|length }} pack{{ 's' if rip_sources|length != 1 else '' }}</span>
+  </div>
+
+  <div class="pf-list">
+    {% for rip in rip_sources %}
+    <a href="{{ url_for('view_rip', rip_id=rip.id) }}" class="pf-row">
+      <img class="pf-thumb"
+           src="{{ rip.pack_image_url or '/static/placeholder.png' }}"
+           alt="{{ rip.pack_name }}"
+           onerror="this.src='/static/placeholder.png'">
+      <div class="pf-info">
+        <div class="pf-pack-name">{{ rip.pack_name }}</div>
+        <div class="pf-meta">
+          {% if rip.pack_set_name %}<span>{{ rip.pack_set_name }}</span><span class="pf-dot">·</span>{% endif %}
+          <span>{{ rip.ripped_at.strftime('%B %d, %Y') }}</span>
+        </div>
+      </div>
+      <span class="pf-arrow">→</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <style>
 /* ── Variant breakdown table ── */
 .detail-row-variants { align-items: flex-start; }
@@ -258,6 +287,85 @@
   color: var(--muted);
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
+}
+
+/* ── Pulled-from section ──────────────────────────────── */
+.pf-section {
+  margin-top: 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.pf-heading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  padding: .85rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.pf-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+.pf-count {
+  font-size: .75rem;
+  font-weight: 600;
+  background: rgba(99,102,241,.18);
+  color: #a5b4fc;
+  padding: .1rem .55rem;
+  border-radius: 999px;
+}
+
+.pf-list { display: flex; flex-direction: column; }
+
+.pf-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: .7rem 1.25rem;
+  text-decoration: none;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255,255,255,.04);
+  transition: background .13s;
+}
+.pf-row:last-child { border-bottom: none; }
+.pf-row:hover { background: rgba(99,102,241,.07); }
+
+.pf-thumb {
+  width: 40px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.pf-info { flex: 1; min-width: 0; }
+.pf-pack-name {
+  font-size: .88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: .15rem;
+}
+.pf-meta {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  font-size: .75rem;
+  color: var(--muted);
+}
+.pf-dot { opacity: .4; }
+.pf-arrow {
+  color: var(--muted);
+  font-size: 1rem;
+  flex-shrink: 0;
+  transition: transform .13s, color .13s;
+}
+.pf-row:hover .pf-arrow {
+  transform: translateX(3px);
+  color: var(--text);
 }
 </style>
 

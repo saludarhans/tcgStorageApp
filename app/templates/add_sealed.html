@@ -200,6 +200,29 @@
   display: flex; flex-direction: column; gap: 8px;
 }
 
+/* ── Language toggle ───────────────────────────────────────── */
+.lang-toggle {
+  display: inline-flex;
+  border-radius: 20px;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  overflow: hidden;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+.lang-btn {
+  padding: 3px 12px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.lang-btn.active {
+  background: rgba(239,68,68,.25);
+  color: #fca5a5;
+}
+
 /* ── States ────────────────────────────────────────────────── */
 .sealed-empty, .sealed-loading {
   display: flex; flex-direction: column; align-items: center;
@@ -225,6 +248,9 @@
 
   <!-- ── CATALOG SECTION ───────────────────────────────────── -->
   <div id="section-catalog">
+    <div id="ja-catalog-note" style="display:none;padding:.55rem 1rem;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:var(--radius);font-size:.82rem;color:#fca5a5;margin-bottom:.75rem">
+      Japanese sealed items aren't in the catalog — use the <strong>Custom Item</strong> tab to add them manually with the correct Japanese set.
+    </div>
     <div class="sealed-search-panel">
       <div class="sealed-field">
         <label>Set</label>
@@ -313,10 +339,17 @@
           <img id="c-img-preview" class="custom-img-preview" alt="preview" onerror="this.style.display='none'">
         </div>
 
-        <div class="custom-field full" style="display:flex;flex-direction:row;align-items:center;gap:1rem">
+        <div class="custom-field full" style="display:flex;flex-direction:row;align-items:center;gap:1.5rem;flex-wrap:wrap">
           <label class="custom-check">
             <input id="c-opened" type="checkbox"> Already opened
           </label>
+          <div style="display:flex;align-items:center;gap:.6rem">
+            <span style="font-size:.8rem;color:var(--muted);font-weight:600">Language</span>
+            <div class="lang-toggle" id="custom-lang-toggle" title="Item language">
+              <button class="lang-btn active" id="cust-lang-en" onclick="setCustomLang('EN')">EN</button>
+              <button class="lang-btn"        id="cust-lang-ja" onclick="setCustomLang('JA')">JA</button>
+            </div>
+          </div>
         </div>
 
         <div class="custom-field full">
@@ -369,6 +402,13 @@
     </div>
   </div>
   <div id="sidebar-footer" class="sidebar-footer" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:.5rem">
+      <span style="font-size:.75rem;color:var(--muted);font-weight:600">Language</span>
+      <div class="lang-toggle" id="catalog-lang-toggle" title="Card language">
+        <button class="lang-btn active" id="cat-lang-en" onclick="setCatalogLang('EN')">EN</button>
+        <button class="lang-btn"        id="cat-lang-ja" onclick="setCatalogLang('JA')">JA</button>
+      </div>
+    </div>
     <button id="btn-save" class="btn btn-primary" style="width:100%">Add to Collection</button>
   </div>
 </aside>
@@ -376,8 +416,45 @@
 </div><!-- /sealed-page -->
 
 <script>
+// ── Dataset injected from server ──────────────────────────
+const ALL_SETS_EN_SEALED = {{ all_sets | tojson }};
+const ALL_SETS_JA_SEALED = {{ all_sets_ja | tojson }};
+
 const el = id => document.getElementById(id);
-let selected = null;
+let selected    = null;
+let catalogLang = 'EN';
+let customLang  = 'EN';
+
+function rebuildSetSelect(selectEl, lang) {
+  const sets = lang === 'JA' ? ALL_SETS_JA_SEALED : ALL_SETS_EN_SEALED;
+  const placeholder = lang === 'JA' ? 'All Japanese sets' : 'All sets';
+  selectEl.innerHTML =
+    `<option value="">${placeholder}</option>` +
+    sets.map(([code, name]) => `<option value="${code}">${name}</option>`).join('');
+}
+
+function setCatalogLang(lang) {
+  catalogLang = lang;
+  el('cat-lang-en').classList.toggle('active', lang === 'EN');
+  el('cat-lang-ja').classList.toggle('active', lang === 'JA');
+  // Swap the catalog search set dropdown
+  rebuildSetSelect(el('f-set'), lang);
+  // Show JA-mode hint
+  el('ja-catalog-note').style.display = lang === 'JA' ? '' : 'none';
+  // Reset any active selection since set list changed
+  selected = null;
+  el('sidebar-empty').style.display    = '';
+  el('sidebar-selected').style.display = 'none';
+  el('sidebar-footer').style.display   = 'none';
+}
+
+function setCustomLang(lang) {
+  customLang = lang;
+  el('cust-lang-en').classList.toggle('active', lang === 'EN');
+  el('cust-lang-ja').classList.toggle('active', lang === 'JA');
+  // Swap the custom-form set dropdown
+  rebuildSetSelect(el('c-set'), lang);
+}
 
 // ── Tab switching ────────────────────────────────────────────
 function switchTab(tab) {
@@ -497,6 +574,7 @@ async function saveItem() {
     market_price:   parseFloat(el('sel-mp').value) || null,
     is_opened:      el('sel-opened').checked,
     notes:          el('sel-notes').value.trim(),
+    language:       catalogLang,
   };
 
   try {
@@ -545,6 +623,7 @@ async function saveCustom() {
     market_price:   parseFloat(el('c-mp').value) || null,
     is_opened:      el('c-opened').checked,
     notes:          el('c-notes').value.trim(),
+    language:       customLang,
   };
 
   try {

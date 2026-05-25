@@ -8,8 +8,8 @@ from sqlalchemy import text
 from werkzeug.utils import secure_filename
 
 from app import app, db
-from app.models import User, Card, CardCatalog, SealedItem, SealedCatalog
-from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, shorten_set_name
+from app.models import User, Card, CardCatalog, SealedItem, SealedCatalog, RipSession, RipSessionCard
+from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, ALL_SETS_JA, shorten_set_name
 
 SET_CODE_TO_NAME = {code: shorten_set_name(name) for code, name in ALL_SETS}
 
@@ -233,14 +233,14 @@ def search():
 
     if len(q) >= 2:
         results = (CardCatalog.query
-                   .filter(CardCatalog.name.ilike(f'{q}%'))
+                   .filter(CardCatalog.name.ilike(f'%{q}%'))
                    .order_by(_SET_AGE_EXPR, _NUM_EXPR, CardCatalog.card_number)
                    .limit(200)
                    .all())
         if results:
             owned_rows = (db.session.query(Card.name, Card.set_code)
                           .filter(Card.user_id == current_user.id,
-                                  Card.name.ilike(f'{q}%'))
+                                  Card.name.ilike(f'%{q}%'))
                           .all())
             owned_keys = {(r.name.lower(), r.set_code) for r in owned_rows}
 
@@ -262,9 +262,11 @@ def _era_for(code):
 @app.route('/card/add')
 @login_required
 def add_card():
-    short_sets = [(code, shorten_set_name(label)) for code, label in ALL_SETS]
-    set_eras   = {code: _era_for(code) for code, _ in ALL_SETS}
-    return render_template('add_card.html', title='Add Card', all_sets=short_sets, set_eras=set_eras)
+    short_sets    = [(code, shorten_set_name(label)) for code, label in ALL_SETS]
+    set_eras      = {code: _era_for(code) for code, _ in ALL_SETS}
+    return render_template('add_card.html', title='Add Card',
+                           all_sets=short_sets, set_eras=set_eras,
+                           all_sets_ja=ALL_SETS_JA)
 
 
 @app.route('/card/<int:card_id>')
@@ -289,8 +291,22 @@ def view_card(card_id):
     variants = [{'label': k, 'qty': v} for k, v in variant_map.items()]
     total_copies = sum(v['qty'] for v in variants)
 
+    # Find every rip session where this exact card was pulled
+    rip_q = (db.session.query(RipSession)
+             .join(RipSessionCard, RipSession.id == RipSessionCard.session_id)
+             .filter(
+                 RipSession.user_id == current_user.id,
+                 db.func.lower(RipSessionCard.name) == card.name.lower(),
+             ))
+    if card.set_code:
+        rip_q = rip_q.filter(RipSessionCard.set_code == card.set_code)
+    if card.card_number:
+        rip_q = rip_q.filter(RipSessionCard.card_number == card.card_number)
+    rip_sources = rip_q.order_by(RipSession.ripped_at.desc()).all()
+
     return render_template('view_card.html', title=card.name, card=card,
-                           variants=variants, total_copies=total_copies)
+                           variants=variants, total_copies=total_copies,
+                           rip_sources=rip_sources)
 
 
 @app.route('/card/<int:card_id>/edit', methods=['GET', 'POST'])
@@ -460,12 +476,13 @@ def local_search():
     set_code = request.args.get('set_code', '').strip()
     number   = request.args.get('number',   '').strip()
     era      = request.args.get('era',      '').strip()
+    lang     = request.args.get('lang',     '').strip().upper()  # 'JA' or ''
     page     = max(int(request.args.get('page', 1) or 1), 1)
     page_size = min(int(request.args.get('pageSize', 20) or 20), 100)
 
     catalog_total = CardCatalog.query.count()
 
-    has_filter = bool(name or set_code or number or era)
+    has_filter = bool(name or set_code or number or era or lang)
     if not has_filter:
         return jsonify({'data': [], 'totalCount': 0,
                         'catalogEmpty': catalog_total == 0})
@@ -473,13 +490,17 @@ def local_search():
     q = CardCatalog.query
 
     if name:
-        q = q.filter(CardCatalog.name.ilike(f'{name}%'))
+        q = q.filter(CardCatalog.name.ilike(f'%{name}%'))
     if set_code:
         q = q.filter(CardCatalog.set_code == set_code)
     if number:
         q = q.filter(CardCatalog.card_number.ilike(f'{number}%'))
     if era and not set_code:
         q = q.filter(CardCatalog.era == era)
+    # When caller specifies lang=JA without a specific set_code, restrict to
+    # the Japanese catalog so EN cards don't bleed into JA name searches.
+    if lang == 'JA' and not set_code:
+        q = q.filter(CardCatalog.era.like('ja-%'))
 
     total = q.count()
     cards = (q.order_by(_SET_AGE_EXPR, _NUM_EXPR, CardCatalog.card_number)
@@ -546,6 +567,7 @@ def quick_add_card():
     card.is_graded      = bool(data.get('is_graded', False))
     card.grade          = data.get('grade')
     card.is_xl          = bool(data.get('is_xl', False))
+    card.language       = data.get('language', 'EN') or 'EN'
     card.notes          = data.get('notes', '')
     if card.market_price:
         card.last_price_update = datetime.utcnow()
@@ -638,7 +660,8 @@ def add_sealed():
     item_types = SealedCatalog.query.with_entities(SealedCatalog.item_type).distinct().order_by(SealedCatalog.item_type).all()
     item_types = [r[0] for r in item_types]
     return render_template('add_sealed.html', title='Add Item',
-                           all_sets=short_sets, item_types=item_types)
+                           all_sets=short_sets, item_types=item_types,
+                           all_sets_ja=ALL_SETS_JA)
 
 
 @app.route('/api/sealed-catalog')
@@ -685,11 +708,200 @@ def sealed_quick_add():
     item.purchase_price = float(pp) if pp else None
     item.market_price   = float(mp) if mp else None
     item.notes          = data.get('notes', '')
+    item.language       = data.get('language', 'EN') or 'EN'
     item.is_opened      = bool(data.get('is_opened', False))
 
     db.session.add(item)
     db.session.commit()
     return jsonify({'ok': True, 'redirect': url_for('view_sealed', item_id=item.id)})
+
+
+@app.route('/rip')
+@login_required
+def rip_center():
+    """Legacy URL — redirect to the Items collection."""
+    return redirect(url_for('sealed_collection'))
+
+
+@app.route('/sealed/<int:item_id>/rip')
+@login_required
+def rip_pack(item_id):
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    if item.item_type != 'Booster Pack':
+        flash('Only Booster Packs can be ripped.', 'warning')
+        return redirect(url_for('view_sealed', item_id=item_id))
+    if item.quantity < 1:
+        flash('No packs left to rip!', 'warning')
+        return redirect(url_for('view_sealed', item_id=item_id))
+    pack_era = _era_for(item.set_code or '')
+    return render_template('rip_pack.html', title='Rip Pack', item=item, pack_era=pack_era)
+
+
+@app.route('/sealed/<int:item_id>/build')
+@login_required
+def build_item(item_id):
+    """Open a non-booster-pack sealed item by adding its contents manually."""
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    if item.item_type == 'Booster Pack':
+        return redirect(url_for('rip_pack', item_id=item_id))
+    if item.quantity < 1:
+        flash('No items left to open!', 'warning')
+        return redirect(url_for('view_sealed', item_id=item_id))
+    return render_template('build_item.html', title=f'Open — {item.name}', item=item)
+
+
+@app.route('/api/sealed/<int:item_id>/complete-build', methods=['POST'])
+@login_required
+def complete_build(item_id):
+    """Add the contents of a non-pack sealed item to the user's collection."""
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+
+    data        = request.get_json(force=True)
+    packs_data  = data.get('packs',  [])
+    promos_data = data.get('promos', [])
+
+    if not packs_data and not promos_data:
+        return jsonify({'ok': False, 'error': 'Nothing added — select packs or promo cards first.'}), 400
+
+    # Add packs to the user's sealed items
+    for p in packs_data:
+        sealed           = SealedItem(user_id=current_user.id)
+        sealed.name      = p.get('name', '').strip()
+        sealed.item_type = p.get('item_type', 'Booster Pack').strip()
+        sealed.set_name  = p.get('set_name', '').strip()
+        sealed.set_code  = p.get('set_code', '').strip()
+        sealed.image_url = p.get('image_url', '').strip()
+        sealed.quantity  = max(1, int(p.get('quantity', 1) or 1))
+        db.session.add(sealed)
+
+    # Add promo cards to the collection
+    for cd in promos_data:
+        card             = Card(user_id=current_user.id)
+        card.name        = cd.get('name', '').strip()
+        card.card_number = cd.get('card_number', '').strip()
+        card.set_name    = cd.get('set_name', '').strip()
+        card.set_code    = cd.get('set_code', '').strip()
+        card.rarity      = cd.get('rarity', '').strip()
+        card.image_url   = cd.get('image_url', '').strip()
+        card.quantity    = 1
+        card.variant     = cd.get('variant') or detect_variant(card.name, card.rarity)
+        card.is_foil     = 'holo' in (card.rarity or '').lower()
+        card.card_type   = 'Pokémon'
+
+        if card.set_code and card.card_number:
+            cat = CardCatalog.query.filter_by(
+                set_code=card.set_code, card_number=card.card_number
+            ).first()
+            if cat and cat.market_price:
+                card.market_price      = cat.market_price
+                card.last_price_update = datetime.utcnow()
+
+        db.session.add(card)
+
+    # Consume one of the parent item
+    item.quantity -= 1
+    if item.quantity <= 0:
+        db.session.delete(item)
+    else:
+        item.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    parts = []
+    if packs_data:
+        n = len(packs_data)
+        parts.append(f'{n} pack{"s" if n != 1 else ""} added to your Items')
+    if promos_data:
+        n = len(promos_data)
+        parts.append(f'{n} promo card{"s" if n != 1 else ""} added to your collection')
+    flash('Opened! ' + ' · '.join(parts) + '.', 'success')
+    return jsonify({'ok': True, 'redirect': url_for('sealed_collection')})
+
+
+@app.route('/api/sealed/<int:item_id>/complete-rip', methods=['POST'])
+@login_required
+def complete_rip(item_id):
+    item = SealedItem.query.get_or_404(item_id)
+    if item.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    if item.item_type != 'Booster Pack':
+        return jsonify({'ok': False, 'error': 'Not a booster pack'}), 400
+
+    data       = request.get_json(force=True)
+    cards_data = data.get('cards', [])
+    if not cards_data:
+        return jsonify({'ok': False, 'error': 'No cards provided'}), 400
+
+    # ── Record the rip session ───────────────────────────────────────────────
+    rip = RipSession(
+        user_id        = current_user.id,
+        pack_name      = item.name,
+        pack_set_name  = item.set_name,
+        pack_set_code  = item.set_code,
+        pack_image_url = item.image_url,
+        card_count     = len(cards_data),
+        ripped_at      = datetime.utcnow(),
+    )
+    db.session.add(rip)
+    db.session.flush()   # assigns rip.id before we reference it below
+
+    for cd in cards_data:
+        card             = Card(user_id=current_user.id)
+        card.name        = cd.get('name', '').strip()
+        card.card_number = cd.get('card_number', '').strip()
+        card.set_name    = cd.get('set_name', '').strip()
+        card.set_code    = cd.get('set_code', '').strip()
+        card.rarity      = cd.get('rarity', '').strip()
+        card.image_url   = cd.get('image_url', '').strip()
+        card.quantity    = 1
+        card.variant     = cd.get('variant') or detect_variant(card.name, card.rarity)
+        card.is_foil        = 'holo' in (card.rarity or '').lower()
+        card.card_type      = 'Pokémon'
+        card.rip_session_id = rip.id   # links this card back to its rip session
+
+        # Pull market price from the local catalog if indexed
+        if card.set_code and card.card_number:
+            cat = CardCatalog.query.filter_by(
+                set_code=card.set_code,
+                card_number=card.card_number
+            ).first()
+            if cat and cat.market_price:
+                card.market_price      = cat.market_price
+                card.last_price_update = datetime.utcnow()
+
+        db.session.add(card)
+
+        # Mirror into the rip session log
+        rc = RipSessionCard(
+            session_id  = rip.id,
+            name        = card.name,
+            card_number = card.card_number,
+            set_name    = card.set_name,
+            set_code    = card.set_code,
+            rarity      = card.rarity,
+            variant     = card.variant,
+            image_url   = card.image_url,
+        )
+        db.session.add(rc)
+
+    # Consume one pack. If that was the last one, remove the item entirely.
+    item.quantity -= 1
+    if item.quantity <= 0:
+        db.session.delete(item)
+    else:
+        item.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    n = len(cards_data)
+    flash(f'Pack ripped! {n} card{"s" if n != 1 else ""} added to your collection.', 'success')
+    return jsonify({'ok': True, 'cards_added': n, 'redirect': url_for('view_rip', rip_id=rip.id)})
 
 
 @app.route('/sealed/<int:item_id>')
@@ -732,4 +944,58 @@ def delete_sealed(item_id):
     db.session.delete(item)
     db.session.commit()
     flash(f'"{name}" removed from your collection.', 'info')
-    return redirect(url_for('collection'))
+    return redirect(url_for('sealed_collection'))
+
+
+# ─── Rip History ─────────────────────────────────────────────────────────────
+
+@app.route('/rips')
+@login_required
+def rip_history():
+    """List all past rip sessions for the current user."""
+    sessions = (RipSession.query
+                .filter_by(user_id=current_user.id)
+                .order_by(RipSession.ripped_at.desc())
+                .all())
+    return render_template('rip_history.html', title='Rip History', sessions=sessions)
+
+
+@app.route('/rips/<int:rip_id>')
+@login_required
+def view_rip(rip_id):
+    """Show every card pulled in a single rip session."""
+    rip = RipSession.query.get_or_404(rip_id)
+    if rip.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+    cards = rip.cards.all()
+    return render_template('view_rip.html',
+                           title=f'Pack Rip — {rip.pack_name}',
+                           rip=rip, cards=cards)
+
+
+@app.route('/rips/<int:rip_id>/delete', methods=['POST'])
+@login_required
+def delete_rip(rip_id):
+    """Delete a rip session and every card that was pulled from it."""
+    rip = RipSession.query.get_or_404(rip_id)
+    if rip.user_id != current_user.id and not current_user.is_admin():
+        abort(403)
+
+    pack_name = rip.pack_name
+
+    # Remove all collection cards that were added by this rip
+    deleted = Card.query.filter_by(
+        user_id        = current_user.id,
+        rip_session_id = rip_id,
+    ).delete(synchronize_session=False)
+
+    # Remove the session itself (cascades to rip_session_cards automatically)
+    db.session.delete(rip)
+    db.session.commit()
+
+    flash(
+        f'"{pack_name}" rip deleted — {deleted} card{"s" if deleted != 1 else ""} '
+        f'removed from your collection.',
+        'info',
+    )
+    return redirect(url_for('rip_history'))
