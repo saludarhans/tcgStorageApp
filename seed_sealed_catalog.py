@@ -240,8 +240,15 @@ _BB_SETS = [
     'cel25','pgo',
     'sv1','sv2','sv3','sv3pt5','sv4','sv5','sv6',
     'sv7','sv8','sv9','sv10',
-    'me1','me2',
+    'me1','me2','me3','me4',
 ]
+
+# Sets with a display.png in the ptcg-assets repo (used as booster pack fallback).
+_HAS_DISPLAY = set(_BB_SETS) | {
+    'swsh35','swsh45','cel25','pgo',
+    'rsv10pt5','zsv10pt5','sm75','sm115',
+    'sv4pt5','sv6pt5','sv8pt5',
+}
 
 # Sets with NO standalone booster box (special/subset releases).
 _NO_BOX_SETS = {
@@ -253,6 +260,8 @@ _NO_BOX_SETS = {
     'sv6pt5',  # Shrouded Fable  – subset, no booster box
     'sv8pt5',  # Prismatic Evolutions – subset, no booster box
     'rsv10pt5','zsv10pt5',  # White Flare / Black Bolt – dual-set, no booster box
+    'svp','swshp','smp','xyp','bwp',  # Promo sets – no booster box
+    'me2pt5',  # Ascended Heroes – mini tin set, no booster box
 }
 
 # Sets with NO standard 3-pack blister.
@@ -262,7 +271,15 @@ _NO_BLISTER_SETS = {
     'swsh35',  # Champion's Path – no retail blister
     'swsh45',  # Shining Fates   – no retail blister
     'rsv10pt5','zsv10pt5',  # White Flare / Black Bolt – no retail blister
+    'svp','swshp','smp','xyp','bwp',  # Promo sets – no retail blister
+    'me2pt5',  # Ascended Heroes – mini tin set, no retail blister
 }
+
+# Sets with NO booster pack (promo/special sets that don't sell packs at retail).
+_NO_PACK_SETS = {'svp','swshp','smp','xyp','bwp', 'me2pt5'}
+
+# Sets with NO Elite Trainer Box.
+_NO_ETB_SETS  = {'svp','swshp','smp','xyp','bwp'}
 
 # ─── Elite Trainer Box images ─────────────────────────────────────────────────
 _ETB = {
@@ -289,6 +306,8 @@ _ETB = {
     'me1':'elite-trainer-box.png', 'me2':'elite-trainer-box-mep-22.png',
     'me2pt5':'elite-trainer-box.png', 'me3':'elite-trainer-box.png',
     'me4':'elite-trainer-box.png',
+    'rsv10pt5':'elite-trainer-box-svp-210.png',
+    'zsv10pt5':'elite-trainer-box-svp-209.png',
     **{f'sm{i}':'elite-trainer-box.png' for i in range(1,13)},
     **{f'xy{i}':'elite-trainer-box.png' for i in range(1,13)},
 }
@@ -323,20 +342,126 @@ _BLISTER = {
     'sm10':'triple-blister-smp-SM185.png',
     'xy1':'triple-blister.png',           'xy2':'triple-blister-bw10-49.png',
     'xy3':'poke_xy03_3pblist_trevenant.jpg','xy4':'poke_xy4_blister_3.jpg',
+    'xy5':'triple-blister.png',           'xy6':'triple-blister.png',
     'xy7':'triple-blister-xyp-XY58.png',  'xy8':'triple-blister.png',
     'xy9':'triple-blister.png',            'xy10':'triple-blister-xyp-XY137.png',
     'xy11':'triple-blister.png',           'xy12':'triple-blister-xyp-XY160.png',
     'me1':'triple-blister-mep-7.png',     'me2':'triple-blister-mep-20.png',
+    'me3':'triple-blister.png',           'me4':'triple-blister.png',
+    'sm2':'triple-blister.png',           'sm3':'triple-blister.png',
+    'sm6':'triple-blister.png',           'sm7':'triple-blister.png',
+    'sm8':'triple-blister.png',           'sm9':'triple-blister.png',
+    'sm11':'triple-blister.png',          'sm12':'triple-blister.png',
+    'sm75':'triple-blister.png',
+    'cel25':'triple-blister-swshp-SWSH144.png',
+    'pgo':'triple-blister-swshp-SWSH229.png',
+    'swsh45':'triple-blister-swshp-SWSH087.png',
+    'swsh35':'triple-blister-swshp-SWSH050.png',
+    'rsv10pt5':'triple-blister-svp-208.png',
+    'zsv10pt5':'triple-blister-svp-207.png',
+    'sv3pt5':'triple-blister-svp-49.png',
+}
+
+# ─── Premium/Super-Premium Collection images ─────────────────────────────────
+# Maps set_code → filename for the "generic" premium-collection image.
+# Used as a fallback for any Premium Collection product in that set that isn't
+# listed in _NAMED_IMG.
+_PREM = {
+    # Scarlet & Violet
+    'sv1':'premium-collection.png',   'sv2':'premium-collection.png',
+    'sv3':'premium-collection.png',   'sv4':'premium-collection.png',
+    'sv5':'premium-collection.png',   'sv6':'premium-collection.png',
+    'sv7':'premium-collection.png',   'sv8':'premium-collection.png',
+    'sv9':'premium-collection.png',   'sv10':'premium-collection.png',
+    'sv3pt5':'premium-collection.png','sv4pt5':'premium-collection.png',
+    'sv6pt5':'premium-collection.png',
+    # Sword & Shield
+    'swsh1':'premium-collection.png', 'swsh2':'premium-collection.png',
+    'swsh3':'premium-collection.png', 'swsh4':'premium-collection.png',
+    'swsh5':'premium-collection.png', 'swsh6':'premium-collection.png',
+    'swsh7':'premium-collection.png', 'swsh8':'premium-collection.png',
+    'swsh9':'premium-collection.png', 'swsh10':'premium-collection.png',
+    'swsh11':'premium-collection.png','swsh12':'premium-collection.png',
+    'swsh12pt5':'premium-collection.png',
+    'swsh35':'premium-collection.png','swsh45':'premium-collection.png',
+    'cel25':'premium-collection.png', 'pgo':'premium-collection.png',
+    # Sun & Moon
+    **{f'sm{i}':'premium-collection.png' for i in range(1,13)},
+    # XY
+    **{f'xy{i}':'premium-collection.png' for i in range(1,13)},
+    # Mega Evolution
+    'me1':'premium-collection.png',   'me2':'premium-collection.png',
+    'me2pt5':'premium-collection.png','me3':'premium-collection.png',
+    'me4':'premium-collection.png',
+    # Black Bolt / White Flare
+    'rsv10pt5':'premium-collection.png','zsv10pt5':'premium-collection.png',
+}
+
+# ─── Booster Bundle images ────────────────────────────────────────────────────
+_BUNDLE = {
+    'sv3pt5':  'booster-bundle.png',
+    'sv6pt5':  'booster-bundle.png',
+    'sv8pt5':  'booster-bundle.png',
+    'sv9':     'booster-bundle.png',
+    'sv10':    'booster-bundle.png',
+    'rsv10pt5':'booster-bundle.png',
+    'zsv10pt5':'booster-bundle.png',
 }
 
 # ─── Named-product image overrides ───────────────────────────────────────────
 _NAMED_IMG = {
-    '151 Binder Collection':     _raw('sv3pt5','binder-collection.png'),
-    '151 Booster Bundle':        _raw('sv3pt5','booster-bundle.png'),
-    'Prismatic Evolutions Collector Chest':
-                                 _raw('sv8pt5','binder-collection.png'),
+    # 151
+    '151 Binder Collection':                    _raw('sv3pt5','binder-collection.png'),
+    '151 Booster Bundle':                       _raw('sv3pt5','booster-bundle.png'),
+    '151 Poster Collection':                    _raw('sv3pt5','poster-collection.png'),
+    # Prismatic Evolutions
+    'Prismatic Evolutions Collector Chest':     _raw('sv8pt5','binder-collection.png'),
+    'Prismatic Evolutions Binder Collection':   _raw('sv8pt5','binder-collection.png'),
     'Prismatic Evolutions Special Illustration Collection':
-                                 _raw('sv8pt5','poster-collection.png'),
+                                                _raw('sv8pt5','poster-collection.png'),
+    'Prismatic Evolutions Poster Collection':   _raw('sv8pt5','poster-collection.png'),
+    'Prismatic Evolutions Booster Bundle':      _raw('sv8pt5','booster-bundle.png'),
+    # Shrouded Fable
+    'Shrouded Fable Booster Bundle':            _raw('sv6pt5','booster-bundle.png'),
+    # Journey Together
+    'Journey Together Booster Bundle':          _raw('sv9','booster-bundle.png'),
+    # Destined Rivals
+    'Destined Rivals Booster Bundle':           _raw('sv10','booster-bundle.png'),
+    # White Flare / Black Bolt
+    'White Flare Booster Bundle':               _raw('rsv10pt5','booster-bundle.png'),
+    'Black Bolt Booster Bundle':                _raw('zsv10pt5','booster-bundle.png'),
+    'White Flare Binder Collection':            _raw('rsv10pt5','binder-collection.png'),
+    'Black Bolt Binder Collection':             _raw('zsv10pt5','binder-collection.png'),
+    'Unova Poster Collection':                  _raw('rsv10pt5','poster-collection.png'),
+    # V Battle Decks
+    'V Battle Deck Venusaur':                   _raw('swsh1','v-battle-deck-venusaur.png'),
+    'V Battle Deck Blastoise':                  _raw('swsh1','v-battle-deck-blastoise.png'),
+    'Single Strike Urshifu V Battle Deck':      _raw('swsh5','v-battle-deck-single-strike-urshifu.png'),
+    'Rapid Strike Urshifu V Battle Deck':       _raw('swsh5','v-battle-deck-rapid-strike-urshifu.png'),
+    # Collector Chests
+    'Obsidian Flames Collector Chest':          _raw('sv3','collector-chest.png'),
+    'Paradox Rift Collector Chest':             _raw('sv4','collector-chest.png'),
+    'Stellar Crown Collector Chest':            _raw('sv7','collector-chest.png'),
+    'Surging Sparks Collector Chest':           _raw('sv8','collector-chest.png'),
+    'Crown Zenith Collector Chest':             _raw('swsh12pt5','collector-chest.png'),
+    'Celebrations Collector Chest':             _raw('cel25','collector-chest.png'),
+    # Pikachu collections
+    'Pikachu Ultra Premium Collection':         _raw('sv8','ultra-premium-collection.png'),
+    'Pikachu Super Premium Collection':         _raw('sv8pt5','super-premium-collection.png'),
+    # Tins without dedicated mini-tin entries
+    'Shining Fates Mini Tin':                   _raw('swsh45','tin.png'),
+    'Celebrations Mini Tin':                    _raw('cel25','tin.png'),
+    'Pokemon GO Mini Tin':                      _raw('pgo','tin.png'),
+    'Crown Zenith Tin Set':                     _raw('swsh12pt5','tin.png'),
+    # Unova Mini Tins
+    'Unova Mini Tin (Reshiram)':    _raw('rsv10pt5','mini-tins/reshiram.png'),
+    'Unova Mini Tin (Zekrom)':      _raw('rsv10pt5','mini-tins/zekrom.png'),
+    'Unova Mini Tin (Snivy)':       _raw('rsv10pt5','mini-tins/snivy.png'),
+    'Unova Mini Tin (Tepig)':       _raw('rsv10pt5','mini-tins/tepig.png'),
+    'Unova Mini Tin (Oshawott)':    _raw('rsv10pt5','mini-tins/oshawott.png'),
+    'Unova Mini Tin (Kyurem)':      _raw('rsv10pt5','mini-tins/kyurem.png'),
+    'Unova Mini Tin (Zorua)':       _raw('rsv10pt5','mini-tins/zorua.png'),
+    'Unova Mini Tin (Victini)':     _raw('rsv10pt5','mini-tins/victini.png'),
 }
 
 
@@ -387,6 +512,11 @@ def _img(code, itype, name):
         return _raw(code, _ETB[code])
     if itype == 'Blister Pack' and code in _BLISTER:
         return _raw(code, _BLISTER[code])
+    if itype == 'Bundle' and code in _BUNDLE:
+        return _raw(code, _BUNDLE[code])
+    if itype in ('Premium Collection', 'Super Premium Collection',
+                 'Gift Box', 'Collection Box') and code in _PREM:
+        return _raw(code, _PREM[code])
     return logo(code)
 
 def _sc(code, name):
@@ -397,10 +527,8 @@ def _sc(code, name):
 
 
 # ─── Special standalone sets (not in ALL_SETS standard loop) ─────────────────
-SPECIAL_SETS = [
-    ('swsh35', "Champion's Path"),
-    ('swsh45', 'Shining Fates'),
-]
+# NOTE: swsh35/swsh45 are already in ALL_SETS so we don't list them here again.
+SPECIAL_SETS = []
 
 # ─── Extra products keyed by set code ────────────────────────────────────────
 EXTRAS = {
@@ -589,14 +717,16 @@ def build_products():
         era = era_for(code)
 
         # 1. Booster pack arts (one entry per art)
-        if code in PACKSHOTS:
-            for fn, art in PACKSHOTS[code]:
-                rows.append(_row(
-                    f'{short} Booster Pack ({art})', 'Booster Pack', short, code,
-                    img=_raw(code, f'packshots/{fn}'),
-                ))
-        else:
-            rows.append(_row(f'{short} Booster Pack', 'Booster Pack', short, code))
+        if code not in _NO_PACK_SETS:
+            if code in PACKSHOTS:
+                for fn, art in PACKSHOTS[code]:
+                    rows.append(_row(
+                        f'{short} Booster Pack ({art})', 'Booster Pack', short, code,
+                        img=_raw(code, f'packshots/{fn}'),
+                    ))
+            else:
+                bp_img = _raw(code, 'display.png') if code in _HAS_DISPLAY else None
+                rows.append(_row(f'{short} Booster Pack', 'Booster Pack', short, code, img=bp_img))
 
         # 2. Standard products (box, ETB, blister)
         for suffix, itype in STANDARD.get(era, STANDARD['sv']):
@@ -608,6 +738,9 @@ def build_products():
                 continue
             # Skip 3-Pack Blister for sets that didn't have one
             if itype == 'Blister Pack' and code in _NO_BLISTER_SETS:
+                continue
+            # Skip ETB for promo sets
+            if itype == 'Elite Trainer Box' and code in _NO_ETB_SETS:
                 continue
             name = f'{short} {suffix}'
             rows.append(_row(name, itype, short, code, img=_img(code, itype, name)))
@@ -633,9 +766,7 @@ def build_products():
     for code, _ in SPECIAL_SETS:
         add_set(code, set_names[code])
 
-    # Keep only the three catalog types — everything else is user-added
-    allowed = {'Booster Pack', 'Elite Trainer Box', 'Super Premium Collection'}
-    return [r for r in rows if r['item_type'] in allowed]
+    return rows
 
 
 # ─── Seed / update ────────────────────────────────────────────────────────────
