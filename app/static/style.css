@@ -220,13 +220,57 @@ img { display: block; max-width: 100%; }
   border-radius: var(--radius);
   padding: 1.1rem 1.25rem;
   display: flex; align-items: center; gap: 1rem;
+  position: relative;
+  overflow: hidden;
 }
 .stat-card.accent { border-color: var(--accent); }
 .stat-card.gain   { border-color: var(--success); }
 .stat-card.loss   { border-color: var(--danger);  }
-.stat-icon { font-size: 1.6rem; }
+.stat-icon { font-size: 1.6rem; position: relative; z-index: 1; }
+.stat-body { position: relative; z-index: 1; }
 .stat-value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
 .stat-label { font-size: .8rem; color: var(--muted); }
+
+/* ── Stat card hover background images ───────────────────────── */
+.stat-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: auto 160%;
+  background-position: center 15%;
+  background-repeat: no-repeat;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  z-index: 0;
+}
+.stat-card:hover::before { opacity: 0.5; }
+
+/* Total Cards → Classic Charizard (Evolutions reprint) */
+#stat-total::before {
+  background-image: url('https://images.pokemontcg.io/xy12/11_hires.png');
+}
+/* Unique Pokémon → Pikachu (Celebrations 25th anniversary) */
+#stat-unique::before {
+  background-image: url('https://images.pokemontcg.io/cel25/5_hires.png');
+}
+/* Sealed Items → Prismatic Evolutions booster box display */
+#stat-sealed::before {
+  background-image: url('https://raw.githubusercontent.com/1niceroli/ptcg-assets/main/sv8pt5/display.png');
+  background-size: cover;
+  background-position: center;
+}
+/* Est. Collection Value → Umbreon VMAX Rainbow Rare */
+#stat-value::before {
+  background-image: url('https://images.pokemontcg.io/swsh7/215_hires.png');
+}
+/* Gain → Rayquaza VMAX Rainbow (soaring upward) */
+#stat-gains.gain::before {
+  background-image: url('https://images.pokemontcg.io/swsh7/218_hires.png');
+}
+/* Loss → Gengar VMAX (dark, haunting) */
+#stat-gains.loss::before {
+  background-image: url('https://images.pokemontcg.io/swsh8/157_hires.png');
+}
 
 /* ── Dashboard grid ───────────────────────────────────────── */
 .dashboard-grid {

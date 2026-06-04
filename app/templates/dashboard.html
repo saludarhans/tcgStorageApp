@@ -5,28 +5,28 @@
 
   <!-- Hero stats strip -->
   <section class="stats-strip">
-    <div class="stat-card">
+    <div class="stat-card" id="stat-total">
       <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ total_cards }}</div>
         <div class="stat-label">Total Cards</div>
       </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" id="stat-unique">
       <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ unique_pokemon }}</div>
         <div class="stat-label">Unique Pokémon</div>
       </div>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" id="stat-sealed">
       <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ sealed_count }}</div>
         <div class="stat-label">Sealed Items</div>
       </div>
     </div>
-    <div class="stat-card accent">
+    <div class="stat-card accent" id="stat-value">
       <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">${{ "%.2f"|format(total_value) }}</div>
@@ -34,7 +34,7 @@
       </div>
     </div>
     {% if profit_loss is not none %}
-    <div class="stat-card {% if profit_loss >= 0 %}gain{% else %}loss{% endif %}">
+    <div class="stat-card {% if profit_loss >= 0 %}gain{% else %}loss{% endif %}" id="stat-gains">
       <div class="stat-icon"></div>
       <div class="stat-body">
         <div class="stat-value">{{ '+' if profit_loss >= 0 else '' }}${{ "%.2f"|format(profit_loss) }}</div>
