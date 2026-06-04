@@ -245,25 +245,11 @@ img { display: block; max-width: 100%; }
 }
 .stat-card:hover::before { opacity: 0.5; }
 
-/* Total Cards → Classic Charizard (Evolutions reprint) */
-#stat-total::before {
-  background-image: url('https://images.pokemontcg.io/xy12/11_hires.png');
-}
-/* Unique Pokémon → Pikachu (Celebrations 25th anniversary) */
-#stat-unique::before {
-  background-image: url('https://images.pokemontcg.io/cel25/5_hires.png');
-}
-/* Sealed Items → Prismatic Evolutions booster box display */
-#stat-sealed::before {
-  background-image: url('https://raw.githubusercontent.com/1niceroli/ptcg-assets/main/sv8pt5/display.png');
-  background-size: cover;
-  background-position: center;
-}
 /* Est. Collection Value → Gholdengo on a beach of gold */
 #stat-value::before {
   background-image: url('/static/gholdengo.png');
   background-size: cover;
-  background-position: center;
+  background-position: center 30%;
 }
 
 /* ── Dashboard grid ───────────────────────────────────────── */
