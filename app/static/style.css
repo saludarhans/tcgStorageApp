@@ -775,3 +775,14 @@ img { display: block; max-width: 100%; }
 .modal-price-value { font-size: 1.6rem; font-weight: 800; color: var(--accent); }
 
 .modal-form { display: flex; flex-direction: column; gap: .75rem; }
+
+/* ── Dashboard footer disclaimer ─────────────────────────────── */
+.dashboard-footer {
+  margin-top: 2.5rem;
+  padding: 0 0.25rem 1.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.5;
+  line-height: 1.6;
+  text-align: center;
+}
