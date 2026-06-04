@@ -9,7 +9,7 @@ from werkzeug.utils import secure_filename
 
 from app import app, db
 from app.models import User, Card, CardCatalog, SealedItem, SealedCatalog, RipSession, RipSessionCard
-from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, ALL_SETS_JA, shorten_set_name
+from app.forms import LoginForm, RegisterForm, CardForm, EditCardForm, SearchForm, ALL_SETS, ALL_SETS_JA, ALL_SETS_KO, shorten_set_name
 
 SET_CODE_TO_NAME = {code: shorten_set_name(name) for code, name in ALL_SETS}
 
@@ -251,12 +251,23 @@ def search():
 # ─── Card CRUD ───────────────────────────────────────────────────────────────
 
 def _era_for(code):
-    if code in ('svp', 'swshp', 'smp', 'xyp', 'bwp'):              return 'promo'
+    _PROMOS = {'svp','swshp','smp','xyp','bwp','hsp','dpp','np','basep','bp',
+               'pop1','pop2','pop3','pop4','pop5','pop6','pop7','pop8','pop9',
+               'mcd11','mcd12','mcd14','mcd15','mcd16','mcd17','mcd18','mcd19',
+               'mcd21','mcd22','ru1','fut20'}
+    if code in _PROMOS:                                              return 'promo'
     if code.startswith('me'):                                        return 'me'
     if code.startswith('swsh') or code in ('cel25', 'pgo'):         return 'swsh'
     if code.startswith('sv') or code.startswith('rsv') or code.startswith('zsv'): return 'sv'
-    if code.startswith('sm'):                                        return 'sm'
-    if code.startswith('xy'):                                        return 'xy'
+    if code.startswith('sm') or code in ('sm35','det1'):            return 'sm'
+    if code.startswith('xy') or code in ('dc1','g1'):               return 'xy'
+    if code.startswith('bw') or code == 'dv1':                      return 'bw'
+    if code.startswith('hgss') or code == 'col1':                   return 'hgss'
+    if code.startswith('dp') or code.startswith('pl'):              return 'dp'
+    if code.startswith('ex'):                                        return 'ex'
+    if code.startswith('neo') or code in ('si1','base6','ecard1','ecard2','ecard3'):
+                                                                     return 'neo'
+    if code.startswith('base') or code.startswith('gym'):           return 'base'
     return 'other'
 
 @app.route('/card/add')
@@ -266,7 +277,7 @@ def add_card():
     set_eras      = {code: _era_for(code) for code, _ in ALL_SETS}
     return render_template('add_card.html', title='Add Card',
                            all_sets=short_sets, set_eras=set_eras,
-                           all_sets_ja=ALL_SETS_JA)
+                           all_sets_ja=ALL_SETS_JA, all_sets_ko=ALL_SETS_KO)
 
 
 @app.route('/card/<int:card_id>')
@@ -497,10 +508,11 @@ def local_search():
         q = q.filter(CardCatalog.card_number.ilike(f'{number}%'))
     if era and not set_code:
         q = q.filter(CardCatalog.era == era)
-    # When caller specifies lang=JA without a specific set_code, restrict to
-    # the Japanese catalog so EN cards don't bleed into JA name searches.
+    # Scope to the correct language catalog when no specific set_code is given.
     if lang == 'JA' and not set_code:
         q = q.filter(CardCatalog.era.like('ja-%'))
+    if lang == 'KO' and not set_code:
+        q = q.filter(CardCatalog.era.like('ko-%'))
 
     total = q.count()
     cards = (q.order_by(_SET_AGE_EXPR, _NUM_EXPR, CardCatalog.card_number)

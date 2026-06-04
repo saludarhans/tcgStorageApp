@@ -293,12 +293,18 @@
         <label>Era / Series</label>
         <select id="f-era" class="form-control">
           <option value="">All eras</option>
-          <option value="xy">XY (2014–2016)</option>
-          <option value="sm">Sun &amp; Moon (2017–2019)</option>
-          <option value="swsh">Sword &amp; Shield (2020–2023)</option>
-          <option value="sv">Scarlet &amp; Violet (2023–2025)</option>
           <option value="me">Mega Evolution (2025–)</option>
-          <option value="promo">Promos</option>
+          <option value="sv">Scarlet &amp; Violet (2023–2025)</option>
+          <option value="swsh">Sword &amp; Shield (2020–2023)</option>
+          <option value="sm">Sun &amp; Moon (2017–2019)</option>
+          <option value="xy">XY (2014–2016)</option>
+          <option value="bw">Black &amp; White (2011–2013)</option>
+          <option value="hgss">HeartGold &amp; SoulSilver (2010–2011)</option>
+          <option value="dp">Diamond &amp; Pearl / Platinum (2007–2009)</option>
+          <option value="ex">EX / Ruby &amp; Sapphire (2003–2007)</option>
+          <option value="neo">Neo / e-Card (2000–2003)</option>
+          <option value="base">Base / Gym (1999–2000)</option>
+          <option value="promo">Promos &amp; Special Sets</option>
         </select>
       </div>
       <div class="picker-field">
@@ -356,6 +362,7 @@
       <div class="lang-toggle" title="Language for cards in this queue">
         <button class="lang-btn active" id="lang-en" onclick="setLang('EN')">EN</button>
         <button class="lang-btn"        id="lang-ja" onclick="setLang('JA')">JA</button>
+        <button class="lang-btn"        id="lang-ko" onclick="setLang('KO')">KO</button>
       </div>
     </div>
     <div id="q-empty-state" class="q-empty-state">
@@ -373,9 +380,10 @@
 
 <script>
 // ── Dataset injected from server ──────────────────────────
-const ALL_SETS_EN = {{ all_sets | tojson }};   // [[code, label], …]
-const SET_ERAS    = {{ set_eras | tojson }};   // {code: era}
+const ALL_SETS_EN = {{ all_sets | tojson }};    // [[code, label], …]
+const SET_ERAS    = {{ set_eras | tojson }};    // {code: era}
 const ALL_SETS_JA = {{ all_sets_ja | tojson }}; // [[code, label], …]
+const ALL_SETS_KO = {{ all_sets_ko | tojson }}; // [[code, label], …]
 
 let currentPage   = 1;
 let totalPages    = 1;
@@ -390,21 +398,26 @@ function setLang(lang) {
   language = lang;
   el('lang-en').classList.toggle('active', lang === 'EN');
   el('lang-ja').classList.toggle('active', lang === 'JA');
+  el('lang-ko').classList.toggle('active', lang === 'KO');
 
   const setSelect = el('f-set');
   const eraRow    = el('era-filter-row');
 
   if (lang === 'JA') {
-    // Replace set options with the real Japanese sets
     setSelect.innerHTML =
       '<option value="">All Japanese sets</option>' +
       ALL_SETS_JA.map(([code, name]) =>
         `<option value="${code}">${name}</option>`
       ).join('');
-    // Hide the EN era filter — JA sets have their own era structure
+    if (eraRow) eraRow.style.display = 'none';
+  } else if (lang === 'KO') {
+    setSelect.innerHTML =
+      '<option value="">All Korean sets</option>' +
+      ALL_SETS_KO.map(([code, name]) =>
+        `<option value="${code}">${name}</option>`
+      ).join('');
     if (eraRow) eraRow.style.display = 'none';
   } else {
-    // Restore English sets (with era data attributes)
     setSelect.innerHTML =
       '<option value="">All sets</option>' +
       ALL_SETS_EN.map(([code, name]) =>
@@ -419,8 +432,9 @@ function setLang(lang) {
   el('results-pagination').style.display = 'none';
   el('results-error').style.display      = 'none';
   el('results-empty').style.display      = 'flex';
-  el('results-empty').querySelector('p').textContent = lang === 'JA'
-    ? 'Select a Japanese set or search by name — run index_japanese_cards.py first if no results appear'
+  el('results-empty').querySelector('p').textContent =
+    lang === 'JA' ? 'Select a Japanese set or search by name — run index_japanese_cards.py first if no results appear'
+    : lang === 'KO' ? 'Select a Korean set or search by name'
     : 'Search for a card above to see results';
   el('search-status').textContent = '';
   syncQueue();
@@ -470,8 +484,8 @@ function buildParams(page) {
   if (setCode)         p.set_code = setCode;
   if (number)          p.number   = number;
   if (!setCode && era) p.era      = era;
-  // In JA mode with no set selected, scope results to JA catalog only
   if (language === 'JA' && !setCode) p.lang = 'JA';
+  if (language === 'KO' && !setCode) p.lang = 'KO';
   return p;
 }
 
@@ -507,15 +521,17 @@ async function doSearch(page) {
       return;
     }
 
-    const cards = data.data || [];
+    const allCards = data.data || [];
+    const cards = allCards.filter(c => c.images?.small || c.images?.large);
     totalPages  = Math.ceil((data.totalCount || 0) / 20) || 1;
     el('search-status').textContent =
       `${data.totalCount || 0} result${data.totalCount !== 1 ? 's' : ''}`;
 
     if (!cards.length) {
       el('results-empty').style.display = 'flex';
-      el('results-empty').querySelector('p').textContent = language === 'JA'
-        ? 'No Japanese cards found — run: python3 index_japanese_cards.py'
+      el('results-empty').querySelector('p').textContent =
+        language === 'JA' ? "I haven't found an API that supports this set yet bro 😂😂💀"
+        : language === 'KO' ? "I haven't found an API that supports this set yet bro 😂😂💀"
         : 'No cards found — try different search terms.';
       return;
     }
@@ -666,10 +682,10 @@ function syncQueue() {
         <div class="q-info">
           <div class="q-name">
             ${item.card.name}
-            ${item.language === 'JA' ? '<span class="lang-badge">JA</span>' : ''}
+            ${item.language === 'JA' ? '<span class="lang-badge">JA</span>' : item.language === 'KO' ? '<span class="lang-badge">KO</span>' : ''}
           </div>
           <div class="q-meta">
-            ${item.card.set?.name || (item.language === 'JA' ? 'Japanese' : '')}${item.card.number ? ' · #' + item.card.number : ''}
+            ${item.card.set?.name || (item.language === 'JA' ? 'Japanese' : item.language === 'KO' ? 'Korean' : '')}${item.card.number ? ' · #' + item.card.number : ''}
           </div>
         </div>
         <button class="q-remove" data-uid="${item.uid}" title="Remove">×</button>
