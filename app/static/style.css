@@ -259,17 +259,11 @@ img { display: block; max-width: 100%; }
   background-size: cover;
   background-position: center;
 }
-/* Est. Collection Value → Umbreon VMAX Rainbow Rare */
+/* Est. Collection Value → Gholdengo on a beach of gold */
 #stat-value::before {
-  background-image: url('https://images.pokemontcg.io/swsh7/215_hires.png');
-}
-/* Gain → Rayquaza VMAX Rainbow (soaring upward) */
-#stat-gains.gain::before {
-  background-image: url('https://images.pokemontcg.io/swsh7/218_hires.png');
-}
-/* Loss → Gengar VMAX (dark, haunting) */
-#stat-gains.loss::before {
-  background-image: url('https://images.pokemontcg.io/swsh8/157_hires.png');
+  background-image: url('/static/gholdengo.png');
+  background-size: cover;
+  background-position: center;
 }
 
 /* ── Dashboard grid ───────────────────────────────────────── */
