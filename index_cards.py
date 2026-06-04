@@ -29,18 +29,30 @@ FIELDS     = 'id,name,number,rarity,supertype,types,hp,images,set,tcgplayer'
 
 
 def era_for(set_code: str) -> str:
-    if set_code in ('svp', 'swshp', 'smp', 'xyp', 'bwp'):
+    _PROMOS = {'svp','swshp','smp','xyp','bwp','hsp','dpp','np','basep','bp',
+               'pop1','pop2','pop3','pop4','pop5','pop6','pop7','pop8','pop9',
+               'mcd11','mcd12','mcd14','mcd15','mcd16','mcd17','mcd18','mcd19',
+               'mcd21','mcd22','ru1','fut20'}
+    if set_code in _PROMOS:
         return 'promo'
-    if set_code.startswith('me'):
-        return 'me'
-    if set_code.startswith('xy'):
-        return 'xy'
-    if set_code.startswith('sm'):
-        return 'sm'
-    if set_code.startswith('swsh') or set_code in ('cel25', 'pgo'):
-        return 'swsh'
+    if set_code.startswith('me'):                          return 'me'
+    if set_code.startswith('xy') or set_code in ('dc1','g1'):
+                                                           return 'xy'
+    if set_code.startswith('sm') or set_code in ('sm35','det1'):
+                                                           return 'sm'
+    if set_code.startswith('swsh') or set_code in ('cel25','pgo'):
+                                                           return 'swsh'
     if set_code.startswith('sv') or set_code.startswith('rsv') or set_code.startswith('zsv'):
-        return 'sv'
+                                                           return 'sv'
+    if set_code.startswith('bw') or set_code == 'dv1':    return 'bw'
+    if set_code.startswith('hgss') or set_code == 'col1': return 'hgss'
+    if set_code.startswith('dp') or set_code.startswith('pl'):
+                                                           return 'dp'
+    if set_code.startswith('ex'):                          return 'ex'
+    if set_code.startswith('neo') or set_code in ('si1','base6','ecard1','ecard2','ecard3'):
+                                                           return 'neo'
+    if set_code.startswith('base') or set_code.startswith('gym'):
+                                                           return 'base'
     return 'other'
 
 
