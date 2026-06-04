@@ -49,6 +49,13 @@ def era_for(code: str) -> str:
     if c.startswith("S"):    return "ja-swsh"
     if c.startswith("XY"):   return "ja-xy"
     if c.startswith("CP"):   return "ja-xy"
+    if c.startswith("M"):    return "ja-xy"      # Mega series (M1L/M1S/M2/M3)
+    if c.startswith("PCG"):  return "ja-rs"      # FireRed/LeafGreen era
+    if c.startswith("E"):    return "ja-rs"      # e-Card era
+    if c.startswith("NEO"):  return "ja-neo"
+    if c.startswith("VS"):   return "ja-neo"
+    if c.startswith("WEB"):  return "ja-neo"
+    if c.startswith("PMCG"): return "ja-base"
     if "-P" in c:            return "ja-promo"
     return "ja"
 
